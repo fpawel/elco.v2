@@ -3,67 +3,55 @@ package old
 import (
 	"encoding/json"
 	"github.com/ansel1/merry"
-	"github.com/fpawel/elco.v2/internal/data"
-	"github.com/fpawel/elco/pkg/winapp"
-	"gopkg.in/reform.v1"
+	"github.com/fpawel/elco/internal/data"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"time"
 )
 
-func ExportLastParty(db *reform.DB) error {
-	var party data.Party
-	if err := data.GetLastParty(db, &party); err != nil {
-		return err
-	}
-	products, err := data.GetLastPartyProducts(db, data.ProductsFilter{})
-	if err != nil {
-		return err
-	}
+func ExportLastParty() error {
+	party := data.GetLastParty()
+	products := data.GetLastPartyProducts(data.ProductsFilter{})
 	oldParty := NewOldParty(party, products)
 	b, err := json.MarshalIndent(&oldParty, "", "    ")
 	if err != nil {
 		return err
 	}
-	importFileName, err := importFileName()
-	if err != nil {
-		return err
-	}
+	importFileName := importFileName()
 	return ioutil.WriteFile(importFileName, b, 0666)
 
 }
 
-func ImportLastParty(db *reform.DB) error {
+func ImportLastParty() error {
 
-	importFileName, err := importFileName()
-	if err != nil {
-		return err
-	}
+	importFileName := importFileName()
+
 	b, err := ioutil.ReadFile(importFileName)
 	if err != nil {
 		return err
 	}
-	var oldParty OldParty
+	var oldParty Party
 	if err := json.Unmarshal(b, &oldParty); err != nil {
 		return err
 	}
 	party, products := oldParty.Party()
 
-	if err := data.EnsureProductTypeName(db, party.ProductTypeName); err != nil {
+	if err := data.EnsureProductTypeName(party.ProductTypeName); err != nil {
 		return err
 	}
 	party.CreatedAt = time.Now().Add(-3 * time.Hour)
-	if err := db.Save(&party); err != nil {
+	if err := data.DB.Save(&party); err != nil {
 		return err
 	}
 	for _, p := range products {
 		p.PartyID = party.PartyID
 		if p.ProductTypeName.Valid {
-			if err := data.EnsureProductTypeName(db, p.ProductTypeName.String); err != nil {
+			if err := data.EnsureProductTypeName(p.ProductTypeName.String); err != nil {
 				return err
 			}
 		}
-		if err := db.Save(&p); err != nil {
+		if err := data.DB.Save(&p); err != nil {
 			return merry.Appendf(err, "product: serial: %v place: %d",
 				p.Serial, p.Place)
 		}
@@ -71,10 +59,6 @@ func ImportLastParty(db *reform.DB) error {
 	return nil
 }
 
-func importFileName() (string, error) {
-	appDataFolderPath, err := winapp.AppDataFolderPath()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(appDataFolderPath, "elco", "export-party.json"), nil
+func importFileName() string {
+	return filepath.Join(filepath.Dir(os.Args[0]), "export-party.json")
 }

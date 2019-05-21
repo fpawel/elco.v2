@@ -14,21 +14,17 @@ import (
 )
 
 var (
-	db  *reform.DB
-	dbx *sqlx.DB
+	DB     *reform.DB
+	DBx    *sqlx.DB
 	dbConn *sql.DB
 )
-
-func Save(record reform.Record) error {
-	return db.Save(record)
-}
 
 func Close() error {
 	return dbConn.Close()
 }
 
 func Open(createNew bool) {
-	dir, err :=Dir()
+	dir, err := Dir()
 	if err != nil {
 		panic(err)
 	}
@@ -55,8 +51,8 @@ func Open(createNew bool) {
 		panic(err)
 	}
 	structlog.New().Info("open sqlite db", "file", fileName)
-	db = reform.NewDB(dbConn, sqlite3.Dialect, nil)
-	dbx = sqlx.NewDb(dbConn, "sqlite3")
+	DB = reform.NewDB(dbConn, sqlite3.Dialect, nil)
+	DBx = sqlx.NewDb(dbConn, "sqlite3")
 }
 
 func Dir() (string, error) {
@@ -101,4 +97,3 @@ WHERE NOT EXISTS(SELECT product_id FROM product WHERE party.party_id = product.p
 `)
 	return err
 }
-

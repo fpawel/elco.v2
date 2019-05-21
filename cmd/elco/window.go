@@ -7,6 +7,7 @@ import (
 	"github.com/lxn/walk"
 	. "github.com/lxn/walk/declarative"
 	"github.com/lxn/win"
+	"strconv"
 )
 
 type AppMainWindow struct {
@@ -34,8 +35,6 @@ func runMainWindow() {
 		Background: SolidColorBrush{Color: walk.RGB(255, 255, 255)},
 		Size:       Size{800, 600},
 		Layout:     VBox{},
-
-
 
 		Children: []Widget{
 			ScrollView{
@@ -66,7 +65,15 @@ func runMainWindow() {
 							Action{
 								Text: "Ввод",
 								OnTriggered: func() {
-
+									for place := 0; place < 96; place++ {
+										s := ""
+										p := lastPartyProducts.ProductsTable().ProductAt(place)
+										if p != nil && p.Serial.Valid {
+											s = strconv.FormatInt(p.Serial.Int64, 10)
+										}
+										formPartySerialsSetCell(place/8+1, place%8+1, s)
+									}
+									formPartySerialsShow()
 								},
 							},
 							Action{
@@ -79,10 +86,9 @@ func runMainWindow() {
 						},
 					},
 					SplitButton{
-						Text:     "Управление",
-						AssignTo: &btnRun,
-						MenuItems: []MenuItem{
-						},
+						Text:      "Управление",
+						AssignTo:  &btnRun,
+						MenuItems: []MenuItem{},
 					},
 					PushButton{
 						AssignTo: &pbCancelWork,
@@ -123,7 +129,7 @@ func runMainWindow() {
 										return
 									}
 									//mw.w.SetVisible(false)
-									x := &FirmwareDialog{productID:p.ProductID}
+									x := &FirmwareDialog{productID: p.ProductID}
 									x.run()
 									//mw.w.SetVisible(true)
 
@@ -132,7 +138,6 @@ func runMainWindow() {
 									switch key {
 
 									case walk.KeyInsert:
-
 
 									case walk.KeyDelete:
 
@@ -148,46 +153,44 @@ func runMainWindow() {
 					GroupBox{
 						Layout: Grid{},
 						Title:  "Опрос",
-						Children:[]Widget{
+						Children: []Widget{
 							TableView{
 								Model:      lastPartyProducts.PlacesTable(),
 								CheckBoxes: true,
-								Columns:[]TableViewColumn{
+								Columns: []TableViewColumn{
 									{
-										Title:"Блок",
+										Title: "Блок",
 									},
 									{
-										Title:"Место 1",
+										Title: "Место 1",
 									},
 									{
-										Title:"Место 2",
+										Title: "Место 2",
 									},
 									{
-										Title:"Место 3",
+										Title: "Место 3",
 									},
 									{
-										Title:"Место 4",
+										Title: "Место 4",
 									},
 									{
-										Title:"Место 5",
+										Title: "Место 5",
 									},
 									{
-										Title:"Место 6",
+										Title: "Место 6",
 									},
 									{
-										Title:"Место 7",
+										Title: "Место 7",
 									},
 									{
-										Title:"Место 8",
+										Title: "Место 8",
 									},
 								},
-
 							},
 						},
 					},
 				},
 			},
-
 		},
 	}).Create(); err != nil {
 		panic(err)
@@ -204,13 +207,13 @@ func runMainWindow() {
 
 func (x AppMainWindow) invalidateProductsColumns() {
 	_ = mw.tblProducts.Columns().Clear()
-	for _,c := range data.NotEmptyProductsFields(lastPartyProducts.Party().Products){
+	for _, c := range data.NotEmptyProductsFields(lastPartyProducts.Party().Products) {
 		col := walk.NewTableViewColumn()
 		_ = col.SetTitle(productColName[c])
 		_ = col.SetWidth(80)
 		_ = mw.tblProducts.Columns().Add(col)
 
-		if precision,f := productsColPrecision[c]; f {
+		if precision, f := productsColPrecision[c]; f {
 			_ = col.SetPrecision(precision)
 		} else {
 			_ = col.SetPrecision(3)
@@ -261,33 +264,30 @@ func comportIndex(portName string) int {
 	return -1
 }
 
-
 var (
-
 	productColName = map[data.ProductField]string{
-	data.ProductFieldPlace:        "№",
-	data.ProductFieldSerial:       "Зав.№",
-	data.ProductFieldFon20:        "фон.20",
-	data.ProductField2Fon20:       "фон.20.2",
-	data.ProductFieldSens20:       "ч.20",
-	data.ProductFieldKSens20:      "Кч.20",
-	data.ProductFieldFonMinus20:   "фон.-20",
-	data.ProductFieldSensMinus20:  "ч.-20",
-	data.ProductFieldFon50:        "фон.50",
-	data.ProductFieldSens50:       "ч.50",
-	data.ProductFieldKSens50:      "Кч.50",
-	data.ProductFieldI24:          "ПГС2",
-	data.ProductFieldI35:          "ПГС3",
-	data.ProductFieldI26:          "ПГС2",
-	data.ProductFieldI17:          "ПГС1",
-	data.ProductFieldNotMeasured:  "неизмеряемый",
-	data.ProductFieldType:         "ИБЯЛ",
-	data.ProductFieldPointsMethod: "метод",
-	data.ProductFieldNote:         "примечание",
-}
-	productsColPrecision = map[data.ProductField]int{
-		data.ProductFieldKSens20:      1,
-		data.ProductFieldKSens50:      1,
+		data.ProductFieldPlace:        "№",
+		data.ProductFieldSerial:       "Зав.№",
+		data.ProductFieldFon20:        "фон.20",
+		data.ProductField2Fon20:       "фон.20.2",
+		data.ProductFieldSens20:       "ч.20",
+		data.ProductFieldKSens20:      "Кч.20",
+		data.ProductFieldFonMinus20:   "фон.-20",
+		data.ProductFieldSensMinus20:  "ч.-20",
+		data.ProductFieldFon50:        "фон.50",
+		data.ProductFieldSens50:       "ч.50",
+		data.ProductFieldKSens50:      "Кч.50",
+		data.ProductFieldI24:          "ПГС2",
+		data.ProductFieldI35:          "ПГС3",
+		data.ProductFieldI26:          "ПГС2",
+		data.ProductFieldI17:          "ПГС1",
+		data.ProductFieldNotMeasured:  "неизмеряемый",
+		data.ProductFieldType:         "ИБЯЛ",
+		data.ProductFieldPointsMethod: "метод",
+		data.ProductFieldNote:         "примечание",
 	}
-
+	productsColPrecision = map[data.ProductField]int{
+		data.ProductFieldKSens20: 1,
+		data.ProductFieldKSens50: 1,
+	}
 )

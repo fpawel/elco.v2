@@ -7,9 +7,9 @@ import (
 
 type LastPartyProductsTable struct {
 	walk.ReflectTableModelBase
-	party *data.Party
-	fields []data.ProductField
-	m2 *LastPartyPlacesTable
+	party    *data.Party
+	fields   []data.ProductField
+	m2       *LastPartyPlacesTable
 	products productsMap
 }
 
@@ -17,7 +17,7 @@ type productsMap = map[int]*data.ProductInfo
 
 func (x *LastPartyProductsTable) ProductAt(place int) *data.ProductInfo {
 
-	p,_ := x.products[place]
+	p, _ := x.products[place]
 	return p
 }
 
@@ -28,13 +28,13 @@ func (x *LastPartyProductsTable) RowCount() int {
 func (x *LastPartyProductsTable) Value(row, col int) interface{} {
 	p := x.ProductAt(row)
 	if p == nil {
-		if col == 0{
+		if col == 0 {
 			return data.FormatPlace(row)
 		}
 		return ""
 	}
 
-	if v := p.FieldValue( x.fields[col] ); v != nil {
+	if v := p.FieldValue(x.fields[col]); v != nil {
 		return v
 	}
 	return ""
@@ -61,7 +61,7 @@ func (x *LastPartyProductsTable) SetChecked(row int, checked bool) error {
 		return err
 	}
 	product.Production = checked
-	err := data.Save(product)
+	err := data.DB.Save(product)
 
 	x.m2.PublishRowChanged(row / 8)
 
@@ -70,12 +70,11 @@ func (x *LastPartyProductsTable) SetChecked(row int, checked bool) error {
 
 func (x *LastPartyProductsTable) StyleCell(c *walk.CellStyle) {
 
-	if (c.Row() / 8) % 2 != 0 {
-		c.BackgroundColor = walk.RGB(245,245,245)
+	if (c.Row()/8)%2 != 0 {
+		c.BackgroundColor = walk.RGB(245, 245, 245)
 	}
 
-
-	if c.Col() < 0 || c.Col() >= len(x.fields){
+	if c.Col() < 0 || c.Col() >= len(x.fields) {
 		return
 	}
 
@@ -93,28 +92,22 @@ func (x *LastPartyProductsTable) StyleCell(c *walk.CellStyle) {
 		}
 	case data.ProductFieldSerial:
 		c.Font = fontSerial
-		c.TextColor = walk.RGB(128,0,0)
+		c.TextColor = walk.RGB(128, 0, 0)
 	}
-	if field == data.ProductFieldPlace {
-		if p.HasFirmware {
-			c.Image = "assets/png16/check.png"
-		}
-	}
+
 	chk := p.OkFieldValue(field)
-	if chk.Valid{
+	if chk.Valid {
 		if chk.Bool {
-			c.TextColor = walk.RGB(0,0,0xFF)
+			c.TextColor = walk.RGB(0, 0, 0xFF)
 		} else {
-			c.TextColor = walk.RGB(0xFF,0,0)
+			c.TextColor = walk.RGB(0xFF, 0, 0)
 		}
 	}
 }
 
 var fontSerial, fontDefault *walk.Font
 
-func init(){
-	fontSerial,_ = walk.NewFont("Segoe UI", 12, walk.FontItalic)
-	fontDefault,_ = walk.NewFont("Segoe UI", 12, 0)
+func init() {
+	fontSerial, _ = walk.NewFont("Segoe UI", 12, walk.FontItalic)
+	fontDefault, _ = walk.NewFont("Segoe UI", 12, 0)
 }
-
-

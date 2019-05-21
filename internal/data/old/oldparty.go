@@ -2,13 +2,13 @@ package old
 
 import (
 	"database/sql"
-	"github.com/fpawel/elco.v2/internal/data"
+	"github.com/fpawel/elco/internal/data"
 	"math/rand"
 	"strings"
 	"time"
 )
 
-type OldParty struct {
+type Party struct {
 	Date            OldPartyDate `json:"Date"`
 	ID              string       `json:"Id"`
 	Name            string       `json:"Name"`
@@ -16,11 +16,11 @@ type OldParty struct {
 	PGS2            float64      `json:"PGS2"`
 	PGS3            float64      `json:"PGS3"`
 	ProductType     string       `json:"ProductType"`
-	Products        []OldProduct `json:"Products"`
+	Products        []Product    `json:"Products"`
 	ProductsSerials []int64      `json:"ProductsSerials"`
 }
 
-type OldProduct struct {
+type Product struct {
 	ID               string     `json:"Id"`
 	N                int        `json:"N"`
 	Serial           int64      `json:"Serial"`
@@ -54,7 +54,7 @@ type OldPartyDate struct {
 	Year        int        `json:"Year"`
 }
 
-func (x OldParty) Party() (p data.Party, products []data.Product) {
+func (x Party) Party() (p data.Party, products []data.Product) {
 	p.Concentration1 = x.PGS1
 	p.Concentration2 = x.PGS2
 	p.Concentration3 = x.PGS3
@@ -102,10 +102,10 @@ func (x OldParty) Party() (p data.Party, products []data.Product) {
 	return
 }
 
-func NewOldParty(s data.Party, products []data.Product) (p OldParty) {
+func NewOldParty(s data.Party, products []data.Product) (p Party) {
 
 	t := time.Now()
-	p = OldParty{
+	p = Party{
 		ID:          randStringBytesMaskImprSrc(12),
 		PGS1:        s.Concentration1,
 		PGS2:        s.Concentration2,
@@ -120,7 +120,7 @@ func NewOldParty(s data.Party, products []data.Product) (p OldParty) {
 			Minute: t.Minute(),
 			Second: t.Second(),
 		},
-		Products:        make([]OldProduct, 64),
+		Products:        make([]Product, 64),
 		ProductsSerials: make([]int64, 64),
 	}
 
@@ -139,7 +139,7 @@ func NewOldParty(s data.Party, products []data.Product) (p OldParty) {
 			continue
 		}
 		p.ProductsSerials[y.Place] = y.Serial.Int64
-		p.Products[y.Place] = OldProduct{
+		p.Products[y.Place] = Product{
 			ID:               randStringBytesMaskImprSrc(12),
 			Serial:           y.Serial.Int64,
 			N:                y.Place,

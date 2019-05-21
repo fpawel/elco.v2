@@ -23,7 +23,7 @@ func runPartyDialog() {
 		if !saveOnEdit {
 			return
 		}
-		if err := data.Save(&party); err != nil {
+		if err := data.DB.Save(&party); err != nil {
 			walk.MsgBox(dlg, "Ошибка данных", err.Error(), walk.MsgBoxIconError|walk.MsgBoxOK)
 			return
 		}
@@ -122,11 +122,11 @@ func runPartyDialog() {
 	widgets = append(widgets,
 
 		TextEdit{
-			AssignTo:&edNote,
-			ColumnSpan:4,
-			Text:party.Note.String,
+			AssignTo:   &edNote,
+			ColumnSpan: 4,
+			Text:       party.Note.String,
 			OnTextChanged: func() {
-				if len(edNote.Text()) == 0{
+				if len(edNote.Text()) == 0 {
 					party.Note.Valid = false
 				} else {
 					party.Note.Valid = true
@@ -136,7 +136,7 @@ func runPartyDialog() {
 			},
 		},
 
-		Composite{ColumnSpan:3},
+		Composite{ColumnSpan: 3},
 		PushButton{
 			AssignTo: &btn,
 			Text:     "Закрыть",
