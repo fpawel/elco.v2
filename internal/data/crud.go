@@ -4,8 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/ansel1/merry"
-	"github.com/sirupsen/logrus"
 	"gopkg.in/reform.v1"
+	"time"
 )
 
 //go:generate go run github.com/fpawel/elco/cmd/utils/sqlstr/...
@@ -40,19 +40,26 @@ UPDATE product
 }
 
 func CreateNewParty() int64 {
-	r, err := DB.Exec(`INSERT INTO party DEFAULT VALUES`)
-	if err != nil {
+	party := Party{
+		CreatedAt:       time.Now(),
+		ProductTypeName: "035",
+		PointsMethod:    3,
+		Concentration1:  0,
+		Concentration2:  50,
+		Concentration3:  100,
+		MinFon:          sql.NullFloat64{-1, true},
+		MaxFon:          sql.NullFloat64{2, true},
+		MaxDFon:         sql.NullFloat64{3, true},
+		MinKSens20:      sql.NullFloat64{0.08, true},
+		MaxKSens20:      sql.NullFloat64{0.335, true},
+		MinKSens50:      sql.NullFloat64{110, true},
+		MaxKSens50:      sql.NullFloat64{150, true},
+		MaxDTemp:        sql.NullFloat64{3, true},
+	}
+	if err := DB.Save(&party); err != nil {
 		panic(err)
 	}
-	partyID, err := r.LastInsertId()
-	if err != nil {
-		panic(err)
-	}
-	if r, err = DB.Exec(`INSERT INTO product(party_id, serial, place) VALUES (?, 1, 0)`, partyID); err != nil {
-		panic(err)
-	}
-	logrus.Warnf("new party created: %d", partyID)
-	return partyID
+	return party.PartyID
 }
 
 func GetLastPartyID() (partyID int64) {
@@ -165,13 +172,58 @@ func Gases() []Gas {
 	return gas
 }
 
-func GetLastPartyProductAtPlace(place int, product *Product) error {
-	return DB.SelectOneTo(product, "WHERE party_id = (SELECT party_id FROM last_party) AND place = ?", place)
+func GetProductAtPlace(place int) (p Product) {
+	partyID := GetLastPartyID()
+	err := DB.SelectOneTo(&p, "WHERE party_id = ? AND place = ?", partyID, place)
+	if err == nil {
+		return
+	}
+	if err == reform.ErrNoRows {
+		p.Place = place
+		p.PartyID = partyID
+		return
+	}
+	panic(err)
 }
 
-func GetProductAtPlace(place int, product *Product) (err error) {
-	err = DB.SelectOneTo(product, "WHERE party_id = ? AND place = ?", GetLastPartyID(), place)
+func GetProductInfoAtPlace(place int) (p ProductInfo) {
+	partyID := GetLastPartyID()
+	err := DB.SelectOneTo(&p, "WHERE party_id = ? AND place = ?", partyID, place)
+	if err == nil {
+		return
+	}
+	if err == reform.ErrNoRows {
+		p.Place = place
+		p.PartyID = partyID
+		return
+	}
+	panic(err)
 	return
+}
+
+func SetProductSerialAtPlace(place int, serial sql.NullInt64) error {
+	partyID := GetLastPartyID()
+	var p Product
+	err := DB.SelectOneTo(&p, "WHERE party_id = ? AND place = ?", partyID, place)
+	if err == reform.ErrNoRows {
+		p.Place = place
+		p.PartyID = partyID
+		err = nil
+	}
+	if err != nil {
+		return err
+	}
+	p.Serial = serial
+	return DB.Save(&p)
+}
+
+func GetProductSerialAtPlace(place int) sql.NullInt64 {
+	var p Product
+	err := DB.SelectOneTo(&p, "WHERE party_id = ? AND place = ?", GetLastPartyID(), place)
+	if err != nil && err != reform.ErrNoRows {
+		panic(err)
+	}
+	return p.Serial
 }
 
 func UpdateProductAtPlace(place int, f func(p *Product) error) (int64, error) {

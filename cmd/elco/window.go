@@ -7,7 +7,6 @@ import (
 	"github.com/lxn/walk"
 	. "github.com/lxn/walk/declarative"
 	"github.com/lxn/win"
-	"strconv"
 )
 
 type AppMainWindow struct {
@@ -65,15 +64,7 @@ func runMainWindow() {
 							Action{
 								Text: "Ввод",
 								OnTriggered: func() {
-									for place := 0; place < 96; place++ {
-										s := ""
-										p := lastPartyProducts.ProductsTable().ProductAt(place)
-										if p != nil && p.Serial.Valid {
-											s = strconv.FormatInt(p.Serial.Int64, 10)
-										}
-										formPartySerialsSetCell(place/8+1, place%8+1, s)
-									}
-									formPartySerialsShow()
+									formPartySerialsSetVisible(true)
 								},
 							},
 							Action{
@@ -125,7 +116,7 @@ func runMainWindow() {
 								OnItemActivated: func() {
 
 									p := lastPartyProducts.ProductsTable().ProductAt(mw.tblProducts.CurrentIndex())
-									if p == nil {
+									if p.ProductID == 0 {
 										return
 									}
 									//mw.w.SetVisible(false)
@@ -207,7 +198,7 @@ func runMainWindow() {
 
 func (x AppMainWindow) invalidateProductsColumns() {
 	_ = mw.tblProducts.Columns().Clear()
-	for _, c := range data.NotEmptyProductsFields(lastPartyProducts.Party().Products) {
+	for _, c := range data.NotEmptyProductsFields(lastPartyProducts.Products()) {
 		col := walk.NewTableViewColumn()
 		_ = col.SetTitle(productColName[c])
 		_ = col.SetWidth(80)

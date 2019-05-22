@@ -10,7 +10,7 @@ import (
 	_ "runtime/cgo"
 )
 
-func main(){
+func main() {
 
 	structlog.DefaultLogger.
 		SetPrefixKeys(
@@ -42,17 +42,16 @@ func main(){
 	app.SetOrganizationName("analitpribor")
 	app.SetProductName("elco")
 	settings = walk.NewIniFileSettings("settings.ini")
-	log.ErrIfFail( settings.Load )
+	log.ErrIfFail(settings.Load)
 	app.SetSettings(settings)
 
 	lastPartyProducts.Invalidate()
 
 	runMainWindow()
 
-	log.ErrIfFail( settings.Save )
-	log.ErrIfFail( data.Close )
-
-
+	log.ErrIfFail(settings.Save)
+	log.ErrIfFail(data.Close)
+	formPartySerialsSetVisible(false)
 }
 
 var (
@@ -60,10 +59,7 @@ var (
 	mw                = AppMainWindow{
 		DelayHelp: new(delayHelp),
 	}
-	cancelComport  = func() {}
-	skipDelay      = func() {}
-	settings  *walk.IniFileSettings
-
-
-
+	cancelComport = func() {}
+	skipDelay     = func() {}
+	settings      *walk.IniFileSettings
 )

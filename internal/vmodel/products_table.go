@@ -5,29 +5,24 @@ import (
 	"github.com/lxn/walk"
 )
 
-type LastPartyProductsTable struct {
+type ProductsTable struct {
 	walk.ReflectTableModelBase
-	party    *data.Party
 	fields   []data.ProductField
-	m2       *LastPartyPlacesTable
-	products productsMap
+	m2       *PlacesTable
+	products []data.ProductInfo
 }
 
-type productsMap = map[int]*data.ProductInfo
-
-func (x *LastPartyProductsTable) ProductAt(place int) *data.ProductInfo {
-
-	p, _ := x.products[place]
-	return p
+func (x *ProductsTable) ProductAt(place int) data.ProductInfo {
+	return x.products[place]
 }
 
-func (x *LastPartyProductsTable) RowCount() int {
+func (x *ProductsTable) RowCount() int {
 	return 96
 }
 
-func (x *LastPartyProductsTable) Value(row, col int) interface{} {
+func (x *ProductsTable) Value(row, col int) interface{} {
 	p := x.ProductAt(row)
-	if p == nil {
+	if p.ProductID == 0 {
 		if col == 0 {
 			return data.FormatPlace(row)
 		}
@@ -40,35 +35,29 @@ func (x *LastPartyProductsTable) Value(row, col int) interface{} {
 	return ""
 }
 
-func (x *LastPartyProductsTable) Checked(row int) bool {
+func (x *ProductsTable) Checked(row int) bool {
 	p := x.ProductAt(row)
-	if p == nil {
+	if p.ProductID == 0 {
 		return false
 	}
 	return p.Production
 }
 
-func (x *LastPartyProductsTable) SetChecked(row int, checked bool) error {
+func (x *ProductsTable) SetChecked(row int, checked bool) error {
 
-	p := x.ProductAt(row)
-	if p == nil {
-		return nil
-	}
+	p := data.GetProductAtPlace(row)
 	p.Production = checked
-
-	product := new(data.Product)
-	if err := data.GetProductAtPlace(p.Place, product); err != nil {
+	if err := data.DB.Save(&p); err != nil {
 		return err
 	}
-	product.Production = checked
-	err := data.DB.Save(product)
-
+	x.products[row].ProductID = p.ProductID
+	x.products[row].Production = p.Production
+	x.products[row].Place = row
 	x.m2.PublishRowChanged(row / 8)
-
-	return err
+	return nil
 }
 
-func (x *LastPartyProductsTable) StyleCell(c *walk.CellStyle) {
+func (x *ProductsTable) StyleCell(c *walk.CellStyle) {
 
 	if (c.Row()/8)%2 != 0 {
 		c.BackgroundColor = walk.RGB(245, 245, 245)
@@ -79,7 +68,7 @@ func (x *LastPartyProductsTable) StyleCell(c *walk.CellStyle) {
 	}
 
 	p := x.ProductAt(c.Row())
-	if p == nil {
+	if p.ProductID == 0 {
 		return
 	}
 
