@@ -62,4 +62,5 @@ var (
 	cancelComport = func() {}
 	skipDelay     = func() {}
 	settings      *walk.IniFileSettings
+	log           = structlog.New()
 )

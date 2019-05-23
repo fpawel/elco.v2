@@ -23,7 +23,7 @@ func formPartySerialsSetVisible(visible bool) {
 	if visible {
 		v = 1
 	}
-	checkSyscall(formPartySerialsSetVisibleProc.Call(v))
+	_, _, _ = formPartySerialsSetVisibleProc.Call(v)
 	if visible {
 		for place := 0; place < 96; place++ {
 			formPartySerialsSetCell(place%8+1, place/8+1,
@@ -60,9 +60,9 @@ func stringToUTF16Ptr(s string) unsafe.Pointer {
 	return unsafe.Pointer(p)
 }
 
-func checkSyscall(r1 uintptr, _ uintptr, lastErr error) {
+func checkSyscall(r1 uintptr, r2 uintptr, lastErr error) {
 	if r1 == 0 {
-		panic(lastErr)
+		log.Panicln(r1, r2, lastErr)
 	}
 }
 
@@ -96,14 +96,6 @@ func parseNullInt64(s string) (sql.NullInt64, error) {
 
 func init() {
 	checkSyscall(elcoDLL.NewProc("Init").Call())
-
-	checkSyscall(
-		elcoDLL.
-			NewProc("FormPartySerialsSetOnHide").
-			Call(uintptr(syscall.NewCallback(func() uintptr {
-				lastPartyProducts.Invalidate()
-				return 0
-			}))))
 
 	checkSyscall(
 		elcoDLL.
