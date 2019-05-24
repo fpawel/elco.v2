@@ -1,13 +1,12 @@
 package data
 
 import (
-	"database/sql"
 	"encoding/binary"
 	"fmt"
 	"github.com/ansel1/merry"
 	"github.com/fpawel/comm/modbus"
+	"log"
 	"math"
-	"strconv"
 	"time"
 )
 
@@ -25,18 +24,19 @@ type Firmware struct {
 
 type FirmwareInfo struct {
 	TempPoints
-	Place int
-	Time  time.Time
-	Sensitivity,
-	Serial,
+	Place       int
+	Time        time.Time
+	Sensitivity float64
+	Serial      int64
+
 	ProductType,
 	Gas,
-	Units,
+	Units string
 	ScaleBeg,
 	ScaleEnd,
 	ISMinus20,
 	ISPlus20,
-	ISPlus50 string
+	ISPlus50 float64
 }
 
 const FirmwareSize = 1832
@@ -61,15 +61,15 @@ func (s ProductInfo) FirmwareInfo() FirmwareInfo {
 		Place:       s.Place,
 		Gas:         s.GasName,
 		Units:       s.UnitsName,
-		ScaleBeg:    "0",
-		ScaleEnd:    fmt.Sprintf("%v", s.Scale),
+		ScaleBeg:    0,
+		ScaleEnd:    s.Scale,
 		ProductType: s.AppliedProductTypeName,
-		Serial:      formatNullInt64(s.Serial),
+		Serial:      s.Serial.Int64,
 		Time:        s.CreatedAt,
-		Sensitivity: formatNullFloat64(s.KSens20, 3),
-		ISPlus20:    formatNullFloat64K(s.ISPlus20, 1000, -1),
-		ISMinus20:   formatNullFloat64K(s.ISMinus20, 1000, -1),
-		ISPlus50:    formatNullFloat64K(s.ISPlus50, 1000, -1),
+		Sensitivity: s.KSens20.Float64,
+		ISPlus20:    s.ISPlus20.Float64 * 1000,
+		ISMinus20:   s.ISMinus20.Float64 * 1000,
+		ISPlus50:    s.ISPlus50.Float64 * 1000,
 	}
 
 	if fonM, err := s.TableFon(); err == nil {
@@ -240,15 +240,21 @@ func (x FirmwareBytes) ProductType() string {
 }
 
 func (x FirmwareBytes) FirmwareInfo(place int) FirmwareInfo {
+
+	bcd := func(b []byte) float64 {
+		v, _ := modbus.ParseBCD6(b)
+		return v
+	}
+
 	r := FirmwareInfo{
 		Place:       place,
 		TempPoints:  x.TempPoints(),
 		Time:        x.Time(),
 		ProductType: x.ProductType(),
-		Serial:      formatBCD(x[0x0701:0x0705], -1),
-		ScaleBeg:    formatBCD(x[0x0602:0x0606], -1),
-		ScaleEnd:    formatBCD(x[0x0606:0x060A], -1),
-		Sensitivity: formatFloat(math.Float64frombits(binary.LittleEndian.Uint64(x[0x0720:])), 3),
+		Serial:      int64(bcd(x[0x0701:0x0705])),
+		ScaleBeg:    bcd(x[0x0602:0x0606]),
+		ScaleEnd:    bcd(x[0x0606:0x060A]),
+		Sensitivity: math.Float64frombits(binary.LittleEndian.Uint64(x[0x0720:])),
 	}
 	for _, a := range ListUnits() {
 		if a.Code == x[0x060A] {
@@ -265,40 +271,68 @@ func (x FirmwareBytes) FirmwareInfo(place int) FirmwareInfo {
 	return r
 }
 
-func (x FirmwareBytes) TempPoints() (r TempPoints) {
+func (x FirmwareBytes) F(t float64) float64 {
+	if t >= 0 && t <= 124 {
+		return x.valueAt(0x0100 + int(t)*2)
+	}
+	if t < 0 && t >= -124 {
+		return x.valueAt(0x0100 + int(124+t)*2)
+	}
+	panic(t)
+}
+func (x FirmwareBytes) S(t float64) float64 {
+	if t >= 0 && t <= 124 {
+		return x.valueAt(0x0500 + int(t)*2)
+	}
+	if t < 0 && t >= -124 {
+		return x.valueAt(0x0400 - int(t)*2)
+	}
+	panic(t)
+}
 
-	valAt := func(i int) float64 {
-		a := binary.LittleEndian.Uint16(x[i:])
-		b := int16(a)
-		y := float64(b)
-		return y
+func (x FirmwareBytes) valueAt(i int) float64 {
+	if i < 0 || i >= len(x) {
+		log.Panic(i, len(x))
 	}
 
+	a := binary.LittleEndian.Uint16(x[i:])
+	b := int16(a)
+	y := float64(b)
+	return y
+}
+
+func (x FirmwareBytes) putValueAt(value float64, i int) {
+	y := math.Round(value)
+	n := uint16(y)
+	binary.LittleEndian.PutUint16(x[i:], n)
+}
+
+func (x FirmwareBytes) TempPoints() (r TempPoints) {
 	t := float64(-124)
 	n := 0
 	for i := 0x00F8; i >= 0; i -= 2 {
 		r.Temp[n] = t
-		r.Fon[n] = valAt(i)
+		r.Fon[n] = x.valueAt(i)
 		t++
 		n++
 	}
 	t = 0
 	for i := 0x0100; i <= 0x01F8; i += 2 {
 		r.Temp[n] = t
-		r.Fon[n] = valAt(i)
+		r.Fon[n] = x.valueAt(i)
 		t++
 		n++
 	}
 	t = -124
 	n = 0
 	for i := 0x04F8; i >= 0x0400; i -= 2 {
-		r.Sens[n] = valAt(i)
+		r.Sens[n] = x.valueAt(i)
 		t++
 		n++
 	}
 	t = 0
 	for i := 0x0500; i <= 0x05F8; i += 2 {
-		r.Sens[n] = valAt(i)
+		r.Sens[n] = x.valueAt(i)
 		t++
 		n++
 	}
@@ -333,64 +367,28 @@ func (x Firmware) Bytes() (b FirmwareBytes) {
 	copy(b[0x060B:], bProductType)
 	binary.LittleEndian.PutUint64(b[0x0720:], math.Float64bits(x.KSens20))
 
-	putTempValue := func(value float64, i int) {
-		y := math.Round(value)
-		n := uint16(y)
-		binary.LittleEndian.PutUint16(b[i:], n)
-	}
-
 	at := NewApproximationTable(x.Fon)
 	t := float64(-124)
 	for i := 0x00F8; i >= 0; i -= 2 {
-		putTempValue(at.F(t), i)
+		b.putValueAt(at.F(t), i)
 		t++
 	}
 	t = 0
 	for i := 0x0100; i <= 0x01F8; i += 2 {
-		putTempValue(at.F(t), i)
+		b.putValueAt(at.F(t), i)
 		t++
 	}
 
 	at = NewApproximationTable(x.Sens)
 	t = float64(-124)
 	for i := 0x04F8; i >= 0x0400; i -= 2 {
-		putTempValue(at.F(t), i)
+		b.putValueAt(at.F(t), i)
 		t++
 	}
 	t = 0
 	for i := 0x0500; i <= 0x05F8; i += 2 {
-		putTempValue(at.F(t), i)
+		b.putValueAt(at.F(t), i)
 		t++
 	}
 	return
-}
-
-func formatNullInt64(v sql.NullInt64) string {
-	if v.Valid {
-		return strconv.FormatInt(v.Int64, 10)
-	}
-	return ""
-}
-
-func formatNullFloat64K(v sql.NullFloat64, k float64, precision int) string {
-	if v.Valid {
-		return formatFloat(v.Float64*k, precision)
-	}
-	return ""
-}
-
-func formatNullFloat64(v sql.NullFloat64, precision int) string {
-	return formatNullFloat64K(v, 1, precision)
-}
-
-func formatFloat(v float64, precision int) string {
-	return strconv.FormatFloat(v, 'f', precision, 64)
-}
-
-func formatBCD(b []byte, precision int) string {
-	if v, ok := modbus.ParseBCD6(b); ok {
-		return formatFloat(v, precision)
-	} else {
-		return fmt.Sprintf("% X", b)
-	}
 }

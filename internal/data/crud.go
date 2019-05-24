@@ -159,6 +159,20 @@ func ListUnits() []Units {
 	return units
 }
 
+func GasesNames() (gases []string) {
+	if err := DBx.Select(&gases, `SELECT gas_name FROM gas`); err != nil {
+		panic(err)
+	}
+	return
+}
+
+func UnitsNames() (units []string) {
+	if err := DBx.Select(&units, `SELECT units_name FROM units`); err != nil {
+		panic(err)
+	}
+	return
+}
+
 func Gases() []Gas {
 	records, err := DB.SelectAllFrom(GasTable, "")
 	if err != nil {

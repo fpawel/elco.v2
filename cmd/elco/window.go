@@ -112,6 +112,7 @@ func runMainWindow() {
 								NotSortableByHeaderClick: true,
 								LastColumnStretched:      true,
 								CheckBoxes:               true,
+								MultiSelection:           true,
 								Model:                    lastPartyProducts.ProductsTable(),
 								OnItemActivated: func() {
 
@@ -119,10 +120,8 @@ func runMainWindow() {
 									if p.ProductID == 0 {
 										return
 									}
-									//mw.w.SetVisible(false)
-									x := &FirmwareDialog{productID: p.ProductID}
+									x := &FirmwareDialog{product: p}
 									x.run()
-									//mw.w.SetVisible(true)
 
 								},
 								OnKeyDown: func(key walk.Key) {
