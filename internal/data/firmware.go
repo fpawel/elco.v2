@@ -271,16 +271,16 @@ func (x FirmwareBytes) FirmwareInfo(place int) FirmwareInfo {
 	return r
 }
 
-func (x FirmwareBytes) F(t float64) float64 {
+func (x FirmwareBytes) FonT(t float64) float64 {
 	if t >= 0 && t <= 124 {
 		return x.valueAt(0x0100 + int(t)*2)
 	}
 	if t < 0 && t >= -124 {
-		return x.valueAt(0x0100 + int(124+t)*2)
+		return x.valueAt(0x0000 - int(t)*2)
 	}
 	panic(t)
 }
-func (x FirmwareBytes) S(t float64) float64 {
+func (x FirmwareBytes) SensT(t float64) float64 {
 	if t >= 0 && t <= 124 {
 		return x.valueAt(0x0500 + int(t)*2)
 	}

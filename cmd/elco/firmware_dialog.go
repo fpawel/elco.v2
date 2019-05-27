@@ -1,16 +1,25 @@
 package main
 
 import (
-	"fmt"
 	"github.com/fpawel/elco.v2/internal/data"
+	"github.com/fpawel/elco.v2/internal/imgchart"
 	"github.com/lxn/walk"
 	. "github.com/lxn/walk/declarative"
+	"golang.org/x/image/bmp"
+	"os"
+	"path/filepath"
 )
 
 type FirmwareDialog struct {
-	product                data.ProductInfo
-	w                      *walk.Dialog
-	rbStored, rbCalculated *walk.RadioButton
+	w        *walk.Dialog
+	firmware struct {
+		store, calc, curr data.FirmwareBytes
+	}
+	rbStored,
+	rbCalculated,
+	rbPoints,
+	rbChart *walk.RadioButton
+
 	neSerial,
 	neScaleBegin,
 	neScaleEnd,
@@ -20,31 +29,8 @@ type FirmwareDialog struct {
 	cbType,
 	cbGas,
 	cbUnits *walk.ComboBox
-	b data.FirmwareBytes
-}
-
-type firmwareTemperatureRow struct {
-	t, f, s       float64
-	neT, neF, neS *walk.NumberEdit
-}
-
-func (x *firmwareTemperatureRow) Row(t, f, s float64) []Widget {
-	return []Widget{
-		NumberEdit{
-			AssignTo: &x.neT,
-			Value:    t,
-		},
-		NumberEdit{
-			AssignTo: &x.neF,
-			Value:    f,
-		},
-		NumberEdit{
-			AssignTo: &x.neS,
-			Value:    s,
-		},
-		PushButton{Text: "+", MaxSize: Size{Width: 30}},
-		PushButton{Text: "-", MaxSize: Size{Width: 30}},
-	}
+	img    *walk.ImageView
+	tblPts *walk.TableView
 }
 
 func setComboBoxText(cb *walk.ComboBox, text string) error {
@@ -56,25 +42,47 @@ func setComboBoxText(cb *walk.ComboBox, text string) error {
 	return cb.SetCurrentIndex(-1)
 }
 
-func (x *FirmwareDialog) changeFirmwareInfoSource() {
+func imgChartFileName() string {
+	return filepath.Join(filepath.Dir(os.Args[0]), "chart.bmp")
+}
 
-	if x.rbStored.Checked() && x.product.HasFirmware {
-		p := data.GetProductByProductID(x.product.ProductID)
-		x.b = data.FirmwareBytes(p.Firmware)
-	} else {
-		f, err := x.product.Firmware()
-		if err == nil {
-			x.b = f.Bytes()
-		} else {
-			x.b = make(data.FirmwareBytes, data.FirmwareSize)
-			for i := range x.b {
-				x.b[i] = 0xFF
-			}
-		}
+func (x *FirmwareDialog) saveChartToFile() {
+	imgChartFileName := imgChartFileName()
+	out, err := os.Create(imgChartFileName)
+	if err != nil {
+		panic(err)
+	}
+	imgChart := imgchart.New(x.firmware.curr, 472, 303)
+	if err := bmp.Encode(out, imgChart); err != nil {
+		panic(err)
+	}
+	if err := out.Close(); err != nil {
+		panic(err)
+	}
+}
+
+func runFirmwareDialog(product data.ProductInfo) {
+
+	x := new(FirmwareDialog)
+	x.firmware.calc = make(data.FirmwareBytes, data.FirmwareSize)
+	x.firmware.store = make(data.FirmwareBytes, data.FirmwareSize)
+
+	for i := range x.firmware.calc {
+		x.firmware.calc[i] = 0xFF
+		x.firmware.store[i] = 0xFF
+	}
+	if product.HasFirmware {
+		x.firmware.store = data.FirmwareBytes(data.GetProductByProductID(product.ProductID).Firmware)
+	}
+	if b, err := product.Firmware(); err == nil {
+		x.firmware.calc = b.Bytes()
 	}
 
-	i := x.b.FirmwareInfo(x.cbPlace.CurrentIndex())
+	x.run(product)
+}
 
+func (x *FirmwareDialog) invalidate() {
+	i := x.firmware.curr.FirmwareInfo(x.cbPlace.CurrentIndex())
 	for _, err := range []error{
 		x.edDate.SetDate(i.Time),
 		x.neSerial.SetValue(float64(i.Serial)),
@@ -89,48 +97,59 @@ func (x *FirmwareDialog) changeFirmwareInfoSource() {
 			panic(err)
 		}
 	}
+	x.tblPts.SetVisible(x.rbPoints.Checked())
+	x.img.SetVisible(x.rbChart.Checked())
+	if x.rbPoints.Checked() {
+		x.tblPts.Model().(*tempPtsModel).PublishRowsReset()
+		return
+	}
+	x.saveChartToFile()
+	img, err := walk.NewImageFromFile(imgChartFileName())
+	if err != nil {
+		panic(err)
+	}
+	if err := x.img.SetImage(img); err != nil {
+		panic(err)
+	}
+
 }
 
-func (x *FirmwareDialog) run() {
-
-	if x.product.HasFirmware {
-		p := data.GetProductByProductID(x.product.ProductID)
-		x.b = data.FirmwareBytes(p.Firmware)
-	} else {
-		f, err := x.product.Firmware()
-		if err == nil {
-			x.b = f.Bytes()
-		} else {
-			x.b = make(data.FirmwareBytes, data.FirmwareSize)
-			for i := range x.b {
-				x.b[i] = 0xFF
-			}
-		}
-	}
+func (x *FirmwareDialog) run(product data.ProductInfo) {
 
 	var places []string
 	for i := 0; i < 96; i++ {
 		places = append(places, data.FormatPlace(i))
 	}
 
-	var wPts []Widget
-	for _, t := range []float64{-40, -30, -20, -5, 0, 20, 30, 40, 45, 50} {
-		wPts = append(wPts,
-			Label{
-				Text: fmt.Sprintf("%v", t),
-			},
-			Label{
-				Text: fmt.Sprintf("%v", x.b.F(t)),
-			},
-			Label{
-				Text: fmt.Sprintf("%v", x.b.S(t)),
-			},
-		)
+	rbChartClick := func() {
+		x.tblPts.SetVisible(x.rbPoints.Checked())
+		x.img.SetVisible(!x.rbPoints.Checked())
+		x.saveChartToFile()
+		_ = x.img.Invalidate()
 	}
 
+	rbFirmwareInfoSourceClick := func() {
+
+		if x.rbStored.Checked() {
+			x.firmware.curr = append(data.FirmwareBytes{}, x.firmware.store...)
+		} else {
+			x.firmware.curr = append(data.FirmwareBytes{}, x.firmware.calc...)
+		}
+		x.invalidate()
+	}
+
+	if product.HasFirmware {
+		x.firmware.curr = append(data.FirmwareBytes{}, x.firmware.store...)
+	} else {
+		x.firmware.curr = append(data.FirmwareBytes{}, x.firmware.calc...)
+	}
+	x.saveChartToFile()
+
 	if err := (Dialog{
-		AssignTo: &x.w,
-		Layout:   HBox{},
+		AssignTo:   &x.w,
+		Layout:     HBox{},
+		Background: SolidColorBrush{Color: walk.RGB(255, 255, 255)},
+
 		Children: []Widget{
 			Composite{
 				Layout: VBox{SpacingZero: true, MarginsZero: true},
@@ -146,7 +165,7 @@ func (x *FirmwareDialog) run() {
 							ComboBox{
 								AssignTo: &x.cbPlace,
 								Model:    places,
-								Value:    data.FormatPlace(x.product.Place),
+								Value:    data.FormatPlace(product.Place),
 							},
 
 							Label{
@@ -220,9 +239,51 @@ func (x *FirmwareDialog) run() {
 							},
 						},
 					},
+					ScrollView{
+						VerticalFixed: true,
+						Layout:        HBox{},
+						Children: []Widget{
+							RadioButtonGroup{
+								Buttons: []RadioButton{
+									{
+										Text:      "Точки",
+										AssignTo:  &x.rbPoints,
+										OnClicked: rbChartClick,
+									},
+									{
+										Text:      "График",
+										AssignTo:  &x.rbChart,
+										OnClicked: rbChartClick,
+									},
+								},
+							},
+						},
+					},
 					Composite{
-						Layout:   Grid{Columns: 3},
-						Children: wPts,
+						Layout: HBox{SpacingZero: true, MarginsZero: true},
+						Children: []Widget{
+							TableView{
+								Visible:  true,
+								AssignTo: &x.tblPts,
+								Model:    &tempPtsModel{b: &x.firmware.curr},
+								Columns: []TableViewColumn{
+									{
+										Title: "Т⁰C",
+									},
+									{
+										Title: "Кч,%",
+									},
+									{
+										Title: "нА",
+									},
+								},
+							},
+							ImageView{
+								Visible:  true,
+								AssignTo: &x.img,
+								//Image: "chart.bmp",
+							},
+						},
 					},
 				},
 			},
@@ -231,7 +292,6 @@ func (x *FirmwareDialog) run() {
 				HorizontalFixed: true,
 				Layout:          VBox{},
 				Children: []Widget{
-
 					PushButton{
 						Text: "Записать",
 					},
@@ -241,18 +301,17 @@ func (x *FirmwareDialog) run() {
 					PushButton{
 						Text: "График",
 					},
-
 					RadioButtonGroup{
 						Buttons: []RadioButton{
 							{
 								Text:      "Записано",
 								AssignTo:  &x.rbStored,
-								OnClicked: x.changeFirmwareInfoSource,
+								OnClicked: rbFirmwareInfoSourceClick,
 							},
 							{
 								AssignTo:  &x.rbCalculated,
 								Text:      "Расчитано",
-								OnClicked: x.changeFirmwareInfoSource,
+								OnClicked: rbFirmwareInfoSourceClick,
 							},
 						},
 					},
@@ -264,8 +323,34 @@ func (x *FirmwareDialog) run() {
 	}
 	x.w.SetFont(mw.w.Font())
 
-	x.rbStored.SetChecked(x.product.HasFirmware)
-	//x.changeFirmwareInfoSource()
+	x.rbPoints.SetChecked(false)
+	x.rbChart.SetChecked(true)
+	x.rbStored.SetChecked(product.HasFirmware)
+	x.rbCalculated.SetChecked(!product.HasFirmware)
+	x.invalidate()
 	x.w.Run()
+}
 
+var firmwareTemperatures = []int{-40, -30, -20, -5, 0, 20, 30, 40, 45, 50}
+
+type tempPtsModel struct {
+	walk.TableModelBase
+	b *data.FirmwareBytes
+}
+
+func (x *tempPtsModel) RowCount() int {
+	return len(firmwareTemperatures)
+}
+
+func (x *tempPtsModel) Value(row, col int) interface{} {
+	switch col {
+	case 0:
+		return firmwareTemperatures[row]
+	case 1:
+		return x.b.FonT(float64(firmwareTemperatures[row]))
+	case 2:
+		return x.b.SensT(float64(firmwareTemperatures[row]))
+	default:
+		return nil
+	}
 }

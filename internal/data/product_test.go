@@ -11,6 +11,6 @@ func TestPrintProductTypeInfo(t *testing.T) {
 	ti := reflect.TypeOf(p)
 	for i := 0; i < ti.NumField(); i++ {
 		field := ti.Field(i)
-		fmt.Printf("F%s := FieldValues['%s'];\n", field.Name, field.Tag.Get("reform"))
+		fmt.Printf("FonT%s := FieldValues['%s'];\n", field.Name, field.Tag.Get("reform"))
 	}
 }

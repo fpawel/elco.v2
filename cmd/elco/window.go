@@ -115,14 +115,10 @@ func runMainWindow() {
 								MultiSelection:           true,
 								Model:                    lastPartyProducts.ProductsTable(),
 								OnItemActivated: func() {
-
 									p := lastPartyProducts.ProductsTable().ProductAt(mw.tblProducts.CurrentIndex())
-									if p.ProductID == 0 {
-										return
+									if p.ProductID != 0 {
+										runFirmwareDialog(p)
 									}
-									x := &FirmwareDialog{product: p}
-									x.run()
-
 								},
 								OnKeyDown: func(key walk.Key) {
 									switch key {
@@ -132,9 +128,6 @@ func runMainWindow() {
 									case walk.KeyDelete:
 
 									}
-
-								},
-								OnCurrentIndexChanged: func() {
 
 								},
 							},
