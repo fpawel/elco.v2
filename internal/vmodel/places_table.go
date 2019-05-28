@@ -12,11 +12,6 @@ type PlacesTable struct {
 	m        *ProductsTable
 }
 
-func (x *ProductsTable) invalidate() {
-	x.fields = data.NotEmptyProductsFields(x.products)
-	x.PublishRowsReset()
-}
-
 func (x *PlacesTable) RowCount() int {
 	return 12
 }

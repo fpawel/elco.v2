@@ -27,11 +27,16 @@ func NewProducts() *Products {
 	return x
 }
 
-func (x *Products) Invalidate() {
+func (x *Products) Setup() {
 	for _, p := range data.GetLastPartyWithProductsInfo(data.ProductsFilter{}).Products {
 		x.products[p.Place] = p
 	}
-	x.m.invalidate()
+	x.m.fields = data.NotEmptyProductsFields(x.products)
+}
+
+func (x *Products) Invalidate() {
+	x.Setup()
+	x.m.PublishRowsReset()
 	x.m2.PublishRowsReset()
 }
 

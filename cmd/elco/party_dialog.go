@@ -81,6 +81,7 @@ func runPartyDialog() {
 				Children: []Widget{
 
 					CheckBox{
+						MaxSize:  Size{15, 0},
 						AssignTo: &cb,
 						Checked:  p.Valid,
 						OnCheckedChanged: func() {
@@ -108,16 +109,16 @@ func runPartyDialog() {
 	neField("ПГС1:", 1, &party.Concentration1)
 	neField("ПГС2:", 1, &party.Concentration2)
 	neField("ПГС3:", 1, &party.Concentration3)
-	neField2("Фон.мин.,мкА", 2, &party.MinFon)
-	neField2("Фон.мaкс.,мкА", 2, &party.MaxFon)
-	neField2("D.фон.мaкс.,мкА", 2, &party.MaxDFon)
-	neField2("Кч20.мин.,мкА/мг/м3", 2, &party.MinKSens20)
-	neField2("Кч20.макс.,мкА/мг/м3", 2, &party.MaxKSens20)
-	neField2("Кч50.мин.,мкА/мг/м3", 2, &party.MinKSens50)
-	neField2("Кч50.макс.,мкА/мг/м3", 2, &party.MaxKSens50)
-	neField2("Dt.мин.,мкА", 2, &party.MinDTemp)
-	neField2("Dt.мaкс.,мкА", 2, &party.MaxDTemp)
-	neField2("Dn.мaкс.,мкА", 2, &party.MaxDNotMeasured)
+	neField2("Фон.мин.", 2, &party.MinFon)
+	neField2("Фон.мaкс.", 2, &party.MaxFon)
+	neField2("Dфон.мaкс.", 2, &party.MaxDFon)
+	neField2("Кч20.мин", 2, &party.MinKSens20)
+	neField2("Кч20.макс", 2, &party.MaxKSens20)
+	neField2("Кч50.мин.", 2, &party.MinKSens50)
+	neField2("Кч50.макс", 2, &party.MaxKSens50)
+	neField2("Dt.мин.", 2, &party.MinDTemp)
+	neField2("Dt.мaкс", 2, &party.MaxDTemp)
+	neField2("Dn.мaкс", 2, &party.MaxDNotMeasured)
 
 	widgets = append(widgets,
 

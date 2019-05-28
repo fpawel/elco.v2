@@ -11,15 +11,12 @@ import (
 )
 
 type FirmwareDialog struct {
-	w        *walk.Dialog
 	firmware struct {
 		store, calc, curr data.FirmwareBytes
 	}
+	w *walk.Dialog
 	rbStored,
-	rbCalculated,
-	rbPoints,
-	rbChart *walk.RadioButton
-
+	rbCalculated *walk.RadioButton
 	neSerial,
 	neScaleBegin,
 	neScaleEnd,
@@ -29,8 +26,7 @@ type FirmwareDialog struct {
 	cbType,
 	cbGas,
 	cbUnits *walk.ComboBox
-	img    *walk.ImageView
-	tblPts *walk.TableView
+	img *walk.ImageView
 }
 
 func setComboBoxText(cb *walk.ComboBox, text string) error {
@@ -52,7 +48,7 @@ func (x *FirmwareDialog) saveChartToFile() {
 	if err != nil {
 		panic(err)
 	}
-	imgChart := imgchart.New(x.firmware.curr, 472, 303)
+	imgChart := imgchart.New(x.firmware.curr, 600, 350)
 	if err := bmp.Encode(out, imgChart); err != nil {
 		panic(err)
 	}
@@ -97,12 +93,6 @@ func (x *FirmwareDialog) invalidate() {
 			panic(err)
 		}
 	}
-	x.tblPts.SetVisible(x.rbPoints.Checked())
-	x.img.SetVisible(x.rbChart.Checked())
-	if x.rbPoints.Checked() {
-		x.tblPts.Model().(*tempPtsModel).PublishRowsReset()
-		return
-	}
 	x.saveChartToFile()
 	img, err := walk.NewImageFromFile(imgChartFileName())
 	if err != nil {
@@ -119,13 +109,6 @@ func (x *FirmwareDialog) run(product data.ProductInfo) {
 	var places []string
 	for i := 0; i < 96; i++ {
 		places = append(places, data.FormatPlace(i))
-	}
-
-	rbChartClick := func() {
-		x.tblPts.SetVisible(x.rbPoints.Checked())
-		x.img.SetVisible(!x.rbPoints.Checked())
-		x.saveChartToFile()
-		_ = x.img.Invalidate()
 	}
 
 	rbFirmwareInfoSourceClick := func() {
@@ -147,20 +130,19 @@ func (x *FirmwareDialog) run(product data.ProductInfo) {
 
 	if err := (Dialog{
 		AssignTo:   &x.w,
-		Layout:     HBox{},
+		Layout:     VBox{},
 		Background: SolidColorBrush{Color: walk.RGB(255, 255, 255)},
 
 		Children: []Widget{
 			Composite{
-				Layout: VBox{SpacingZero: true, MarginsZero: true},
+				Layout: HBox{MarginsZero: true, SpacingZero: true},
 				Children: []Widget{
 					Composite{
 						Layout: Grid{Columns: 4},
 						Children: []Widget{
-
 							Label{
-								TextAlignment: AlignFar,
 								Text:          "Место",
+								TextAlignment: AlignFar,
 							},
 							ComboBox{
 								AssignTo: &x.cbPlace,
@@ -177,14 +159,6 @@ func (x *FirmwareDialog) run(product data.ProductInfo) {
 							},
 
 							Label{
-								Text:          "Дата",
-								TextAlignment: AlignFar,
-							},
-							DateEdit{
-								AssignTo: &x.edDate,
-							},
-
-							Label{
 								Text:          "Исполнение",
 								TextAlignment: AlignFar,
 							},
@@ -194,12 +168,12 @@ func (x *FirmwareDialog) run(product data.ProductInfo) {
 							},
 
 							Label{
-								Text:          "Газ",
+								Text:          "Чувст-ть",
 								TextAlignment: AlignFar,
 							},
-							ComboBox{
-								AssignTo: &x.cbGas,
-								Model:    data.GasesNames(),
+							NumberEdit{
+								AssignTo: &x.neSens,
+								Decimals: 3,
 							},
 
 							Label{
@@ -215,100 +189,62 @@ func (x *FirmwareDialog) run(product data.ProductInfo) {
 								Text:          "Шкала",
 								TextAlignment: AlignFar,
 							},
-							Composite{
-								Layout: HBox{MarginsZero: true, SpacingZero: true},
-								Children: []Widget{
-									NumberEdit{
-										AssignTo: &x.neScaleBegin,
-										Decimals: 1,
-									},
-									NumberEdit{
-										AssignTo: &x.neScaleEnd,
-										Decimals: 1,
-									},
-								},
+							NumberEdit{
+								AssignTo: &x.neScaleBegin,
+								Decimals: 1,
 							},
 
 							Label{
-								Text:          "Чувст-ть",
+								Text:          "Газ",
 								TextAlignment: AlignFar,
 							},
+							ComboBox{
+								AssignTo: &x.cbGas,
+								Model:    data.GasesNames(),
+							},
+
+							Composite{},
 							NumberEdit{
-								AssignTo: &x.neSens,
-								Decimals: 3,
+								AssignTo: &x.neScaleEnd,
+								Decimals: 1,
 							},
 						},
 					},
+
 					ScrollView{
-						VerticalFixed: true,
-						Layout:        HBox{},
+						HorizontalFixed: true,
+						Layout:          VBox{},
 						Children: []Widget{
-							RadioButtonGroup{
-								Buttons: []RadioButton{
-									{
-										Text:      "Точки",
-										AssignTo:  &x.rbPoints,
-										OnClicked: rbChartClick,
-									},
-									{
-										Text:      "График",
-										AssignTo:  &x.rbChart,
-										OnClicked: rbChartClick,
-									},
-								},
+
+							PushButton{
+								Text: "Записать",
 							},
-						},
-					},
-					Composite{
-						Layout: HBox{SpacingZero: true, MarginsZero: true},
-						Children: []Widget{
-							TableView{
-								Visible:  true,
-								AssignTo: &x.tblPts,
-								Model:    &tempPtsModel{b: &x.firmware.curr},
-								Columns: []TableViewColumn{
-									{
-										Title: "Т⁰C",
-									},
-									{
-										Title: "Кч,%",
-									},
-									{
-										Title: "нА",
-									},
-								},
+							PushButton{
+								Text: "Считать",
 							},
-							ImageView{
-								Visible:  true,
-								AssignTo: &x.img,
-								//Image: "chart.bmp",
+							PushButton{
+								Text: "График",
+							},
+
+							DateEdit{
+								AssignTo: &x.edDate,
 							},
 						},
 					},
 				},
 			},
-
 			ScrollView{
-				HorizontalFixed: true,
-				Layout:          VBox{},
+				VerticalFixed: true,
+				Layout:        HBox{MarginsZero: true, SpacingZero: true},
 				Children: []Widget{
-					PushButton{
-						Text: "Записать",
-					},
-					PushButton{
-						Text: "Считать",
-					},
-					PushButton{
-						Text: "График",
-					},
 					RadioButtonGroup{
 						Buttons: []RadioButton{
-							{
+							RadioButton{
 								Text:      "Записано",
 								AssignTo:  &x.rbStored,
 								OnClicked: rbFirmwareInfoSourceClick,
 							},
-							{
+							RadioButton{
 								AssignTo:  &x.rbCalculated,
 								Text:      "Расчитано",
 								OnClicked: rbFirmwareInfoSourceClick,
@@ -317,40 +253,22 @@ func (x *FirmwareDialog) run(product data.ProductInfo) {
 					},
 				},
 			},
+			ImageView{
+				Visible:  true,
+				AssignTo: &x.img,
+				//Image: "chart.bmp",
+			},
 		},
 	}).Create(mw.w); err != nil {
 		panic(err)
 	}
 	x.w.SetFont(mw.w.Font())
 
-	x.rbPoints.SetChecked(false)
-	x.rbChart.SetChecked(true)
 	x.rbStored.SetChecked(product.HasFirmware)
 	x.rbCalculated.SetChecked(!product.HasFirmware)
 	x.invalidate()
 	x.w.Run()
+	x.w.Close(0)
 }
 
 var firmwareTemperatures = []int{-40, -30, -20, -5, 0, 20, 30, 40, 45, 50}
-
-type tempPtsModel struct {
-	walk.TableModelBase
-	b *data.FirmwareBytes
-}
-
-func (x *tempPtsModel) RowCount() int {
-	return len(firmwareTemperatures)
-}
-
-func (x *tempPtsModel) Value(row, col int) interface{} {
-	switch col {
-	case 0:
-		return firmwareTemperatures[row]
-	case 1:
-		return x.b.FonT(float64(firmwareTemperatures[row]))
-	case 2:
-		return x.b.SensT(float64(firmwareTemperatures[row]))
-	default:
-		return nil
-	}
-}

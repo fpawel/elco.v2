@@ -12,6 +12,10 @@ type ProductsTable struct {
 	products []data.ProductInfo
 }
 
+func (x *ProductsTable) Fields() []data.ProductField {
+	return append([]data.ProductField{}, x.fields...)
+}
+
 func (x *ProductsTable) ProductAt(place int) data.ProductInfo {
 	return x.products[place]
 }
@@ -77,7 +81,7 @@ func (x *ProductsTable) StyleCell(c *walk.CellStyle) {
 	switch field {
 	case data.ProductFieldPlace:
 		if p.HasFirmware {
-			c.Image = "assets/png16/check.png"
+			c.Image = "img/check16.png"
 		}
 	case data.ProductFieldSerial:
 		c.Font = fontSerial

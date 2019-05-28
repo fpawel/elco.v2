@@ -19,9 +19,24 @@ type AppMainWindow struct {
 
 func runMainWindow() {
 	var (
-		pbCancelWork *walk.PushButton
-		btnRun       *walk.SplitButton
+		tbStop, tbStart *walk.ToolButton
+		cbWorks         *walk.ComboBox
+		panelTools      *walk.ScrollView
 	)
+
+	log.Debug("create main window")
+
+	lastPartyProducts.Setup()
+
+	var columns []TableViewColumn
+	for _, c := range data.NotEmptyProductsFields(lastPartyProducts.Products()) {
+		precision, _ := productsColPrecision[c]
+		columns = append(columns, TableViewColumn{
+			Title:     productColName[c],
+			Width:     80,
+			Precision: precision,
+		})
+	}
 
 	if err := (MainWindow{
 		AssignTo: &mw.w,
@@ -36,57 +51,77 @@ func runMainWindow() {
 		Layout:     VBox{},
 
 		Children: []Widget{
+
 			ScrollView{
+				AssignTo:      &panelTools,
 				VerticalFixed: true,
-				Layout:        HBox{},
+				Layout:        HBox{SpacingZero: true},
 				Children: []Widget{
-					SplitButton{
-						Text: "Партия",
-						MenuItems: []MenuItem{
-							Action{
-								Text: "Создать новую",
-								OnTriggered: func() {
-									if walk.MsgBox(mw.w, "Новая партия",
-										"Подтвердите необходимость создания новой партии",
-										walk.MsgBoxIconQuestion|walk.MsgBoxYesNo) != win.IDYES {
-										return
-									}
-									data.CreateNewParty()
-									lastPartyProducts.Invalidate()
-								},
-							},
-							Action{
-								Text: "Параметры",
-								OnTriggered: func() {
-									runPartyDialog()
-								},
-							},
-							Action{
-								Text: "Ввод",
-								OnTriggered: func() {
-									formPartySerialsSetVisible(true)
-								},
-							},
-							Action{
-								Text: "Выбрать годные ЭХЯ",
-								OnTriggered: func() {
-									data.SetOnlyOkProductsProduction()
-									lastPartyProducts.Invalidate()
-								},
-							},
-						},
-					},
-					SplitButton{
-						Text:      "Управление",
-						AssignTo:  &btnRun,
-						MenuItems: []MenuItem{},
-					},
-					PushButton{
-						AssignTo: &pbCancelWork,
-						Text:     "Прервать",
+					ToolButton{
+						Text:        "Новая загрузка",
+						Image:       "img/new25.png",
+						ToolTipText: "Создать новую загрузку",
 						OnClicked: func() {
-							cancelComport()
+							if walk.MsgBox(mw.w, "Новая партия",
+								"Подтвердите необходимость создания новой партии",
+								walk.MsgBoxIconQuestion|walk.MsgBoxYesNo) != win.IDYES {
+								return
+							}
+							data.CreateNewParty()
+							lastPartyProducts.Invalidate()
 						},
+					},
+
+					ToolButton{
+						Text:        "Выбрать годные ЭХЯ",
+						Image:       "img/check25m.png",
+						ToolTipText: "Выбрать годные ЭХЯ",
+						OnClicked: func() {
+							data.SetOnlyOkProductsProduction()
+							lastPartyProducts.Invalidate()
+						},
+					},
+
+					ToolButton{
+						Text:        "Паспорта и итоговая таблица",
+						Image:       "img/pdf25.png",
+						ToolTipText: "Паспорта и итоговая таблица",
+						OnClicked: func() {
+							data.SetOnlyOkProductsProduction()
+							lastPartyProducts.Invalidate()
+						},
+					},
+
+					VSpacer{MinSize: Size{10, 0}},
+
+					ComboBox{
+						AssignTo: &cbWorks,
+						Model: []string{
+							"Опрос",
+							"Термокомпенсация",
+							"Погрешность",
+							"Прошивка",
+						},
+						CurrentIndex: 0,
+					},
+
+					VSpacer{MinSize: Size{3, 0}},
+
+					ToolButton{
+						AssignTo:    &tbStop,
+						Visible:     false,
+						Text:        "Прервать выполнение операции",
+						Image:       "img/stop25.png",
+						ToolTipText: "Прервать выполнение операции",
+						OnClicked:   func() {},
+					},
+
+					ToolButton{
+						AssignTo:    &tbStart,
+						Text:        "Начать выполнение выбранной операции",
+						Image:       "img/start25.png",
+						ToolTipText: "Начать выполнение выбранной операции",
+						OnClicked:   func() {},
 					},
 
 					Label{
@@ -97,6 +132,42 @@ func runMainWindow() {
 						AssignTo: &mw.lblWork,
 					},
 					mw.DelayHelp.Widget(),
+					ScrollView{
+						VerticalFixed: true,
+						Layout:        Grid{},
+					},
+					ToolButton{
+						Text:        "Ввод серийных номеров ЭХЯ",
+						Image:       "img/edit25.png",
+						ToolTipText: "Ввод серийных номеров ЭХЯ",
+						OnClicked: func() {
+							formPartySerialsSetVisible(true)
+						},
+					},
+					ToolButton{
+						Text:        "Параметры загрузки",
+						Image:       "img/sets25g.png",
+						ToolTipText: "Параметры загрузки",
+						OnClicked:   runPartyDialog,
+					},
+					ToolButton{
+						Text:        "Настройки",
+						Image:       "img/sets25b.png",
+						ToolTipText: "Настройки",
+						OnClicked: func() {
+							tbStart.SetVisible(!tbStart.Visible())
+							tbStop.SetVisible(!tbStop.Visible())
+							if err := panelTools.Invalidate(); err != nil {
+								panic(err)
+							}
+							if err := tbStop.Invalidate(); err != nil {
+								panic(err)
+							}
+							if err := tbStart.Invalidate(); err != nil {
+								panic(err)
+							}
+						},
+					},
 				},
 			},
 			ScrollView{
@@ -107,6 +178,7 @@ func runMainWindow() {
 						Layout: Grid{},
 						Title:  "Настраиваемые ЭХЯ",
 						Children: []Widget{
+
 							TableView{
 								AssignTo:                 &mw.tblProducts,
 								NotSortableByHeaderClick: true,
@@ -114,6 +186,7 @@ func runMainWindow() {
 								CheckBoxes:               true,
 								MultiSelection:           true,
 								Model:                    lastPartyProducts.ProductsTable(),
+								Columns:                  columns,
 								OnItemActivated: func() {
 									p := lastPartyProducts.ProductsTable().ProductAt(mw.tblProducts.CurrentIndex())
 									if p.ProductID != 0 {
@@ -178,9 +251,7 @@ func runMainWindow() {
 	}).Create(); err != nil {
 		panic(err)
 	}
-
-	pbCancelWork.SetVisible(false)
-	mw.invalidateProductsColumns()
+	log.Debug("run main window")
 	mw.w.Run()
 
 	if err := settings.Save(); err != nil {

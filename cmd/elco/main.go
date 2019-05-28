@@ -45,8 +45,6 @@ func main() {
 	log.ErrIfFail(settings.Load)
 	app.SetSettings(settings)
 
-	lastPartyProducts.Invalidate()
-
 	runMainWindow()
 
 	log.ErrIfFail(settings.Save)
