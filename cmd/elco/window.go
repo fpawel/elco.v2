@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/fpawel/comm/comport"
 	"github.com/fpawel/elco.v2/internal/data"
+	"github.com/fpawel/elco.v2/internal/viewm"
 	"github.com/lxn/walk"
 	. "github.com/lxn/walk/declarative"
 	"github.com/lxn/win"
@@ -26,17 +27,9 @@ func runMainWindow() {
 
 	log.Debug("create main window")
 
-	lastPartyProducts.Setup()
-
-	var columns []TableViewColumn
-	for _, c := range data.NotEmptyProductsFields(lastPartyProducts.Products()) {
-		precision, _ := productsColPrecision[c]
-		columns = append(columns, TableViewColumn{
-			Title:     productColName[c],
-			Width:     80,
-			Precision: precision,
-		})
-	}
+	productsTbl := new(viewm.ProductsTable)
+	blocksTbl := new(viewm.BlocksTable)
+	productsTbl.Reset()
 
 	if err := (MainWindow{
 		AssignTo: &mw.w,
@@ -68,7 +61,7 @@ func runMainWindow() {
 								return
 							}
 							data.CreateNewParty()
-							lastPartyProducts.Invalidate()
+							productsTbl.Reset()
 						},
 					},
 
@@ -78,7 +71,7 @@ func runMainWindow() {
 						ToolTipText: "Выбрать годные ЭХЯ",
 						OnClicked: func() {
 							data.SetOnlyOkProductsProduction()
-							lastPartyProducts.Invalidate()
+							productsTbl.Reset()
 						},
 					},
 
@@ -87,8 +80,7 @@ func runMainWindow() {
 						Image:       "img/pdf25.png",
 						ToolTipText: "Паспорта и итоговая таблица",
 						OnClicked: func() {
-							data.SetOnlyOkProductsProduction()
-							lastPartyProducts.Invalidate()
+
 						},
 					},
 
@@ -185,10 +177,10 @@ func runMainWindow() {
 								LastColumnStretched:      true,
 								CheckBoxes:               true,
 								MultiSelection:           true,
-								Model:                    lastPartyProducts.ProductsTable(),
-								Columns:                  columns,
+								//Model:                    productsTbl,
+								Columns: productsTbl.Columns(),
 								OnItemActivated: func() {
-									p := lastPartyProducts.ProductsTable().ProductAt(mw.tblProducts.CurrentIndex())
+									p := productsTbl.ProductAtPlace(mw.tblProducts.CurrentIndex())
 									if p.ProductID != 0 {
 										runFirmwareDialog(p)
 									}
@@ -211,7 +203,7 @@ func runMainWindow() {
 						Title:  "Опрос",
 						Children: []Widget{
 							TableView{
-								Model:      lastPartyProducts.PlacesTable(),
+								Model:      blocksTbl,
 								CheckBoxes: true,
 								Columns: []TableViewColumn{
 									{
@@ -251,27 +243,17 @@ func runMainWindow() {
 	}).Create(); err != nil {
 		panic(err)
 	}
+
+	productsTbl.Setup(mw.tblProducts, blocksTbl)
+	if err := mw.tblProducts.SetModel(productsTbl); err != nil {
+		panic(err)
+	}
+
 	log.Debug("run main window")
 	mw.w.Run()
 
 	if err := settings.Save(); err != nil {
 		panic(err)
-	}
-}
-
-func (x AppMainWindow) invalidateProductsColumns() {
-	_ = mw.tblProducts.Columns().Clear()
-	for _, c := range data.NotEmptyProductsFields(lastPartyProducts.Products()) {
-		col := walk.NewTableViewColumn()
-		_ = col.SetTitle(productColName[c])
-		_ = col.SetWidth(80)
-		_ = mw.tblProducts.Columns().Add(col)
-
-		if precision, f := productsColPrecision[c]; f {
-			_ = col.SetPrecision(precision)
-		} else {
-			_ = col.SetPrecision(3)
-		}
 	}
 }
 
@@ -317,31 +299,3 @@ func comportIndex(portName string) int {
 	}
 	return -1
 }
-
-var (
-	productColName = map[data.ProductField]string{
-		data.ProductFieldPlace:        "№",
-		data.ProductFieldSerial:       "Зав.№",
-		data.ProductFieldFon20:        "фон.20",
-		data.ProductField2Fon20:       "фон.20.2",
-		data.ProductFieldSens20:       "ч.20",
-		data.ProductFieldKSens20:      "Кч.20",
-		data.ProductFieldFonMinus20:   "фон.-20",
-		data.ProductFieldSensMinus20:  "ч.-20",
-		data.ProductFieldFon50:        "фон.50",
-		data.ProductFieldSens50:       "ч.50",
-		data.ProductFieldKSens50:      "Кч.50",
-		data.ProductFieldI24:          "ПГС2",
-		data.ProductFieldI35:          "ПГС3",
-		data.ProductFieldI26:          "ПГС2",
-		data.ProductFieldI17:          "ПГС1",
-		data.ProductFieldNotMeasured:  "неизмеряемый",
-		data.ProductFieldType:         "ИБЯЛ",
-		data.ProductFieldPointsMethod: "метод",
-		data.ProductFieldNote:         "примечание",
-	}
-	productsColPrecision = map[data.ProductField]int{
-		data.ProductFieldKSens20: 1,
-		data.ProductFieldKSens50: 1,
-	}
-)

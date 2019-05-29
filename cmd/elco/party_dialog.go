@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"github.com/fpawel/elco.v2/internal/data"
+	"github.com/fpawel/elco.v2/internal/viewm"
 	"github.com/lxn/walk"
 	. "github.com/lxn/walk/declarative"
 	"math"
@@ -27,7 +28,7 @@ func runPartyDialog() {
 			walk.MsgBox(dlg, "Ошибка данных", err.Error(), walk.MsgBoxIconError|walk.MsgBoxOK)
 			return
 		}
-		lastPartyProducts.Invalidate()
+		mw.tblProducts.Model().(*viewm.ProductsTable).PublishRowsReset()
 	}
 
 	types := data.ProductTypeNames()

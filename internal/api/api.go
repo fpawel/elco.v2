@@ -15,8 +15,7 @@ type Product struct {
 	Note            string `json:"note,omitempty"`
 }
 
-type LastPartySvc struct {
-}
+type LastPartySvc struct{}
 
 func (_ LastPartySvc) Products(_ struct{}, products *[]*Product) error {
 	*products = make([]*Product, 96)
@@ -30,6 +29,68 @@ func (_ LastPartySvc) Products(_ struct{}, products *[]*Product) error {
 			Note:            p.Note.String,
 		}
 	}
+	return nil
+}
+
+func (x LastPartySvc) GetSerialAtPlace(place [1]int, serial *string) error {
+	product := data.GetProductAtPlace(place[0])
+	if product.Serial.Valid {
+		*serial = strconv.Itoa(int(product.Serial.Int64))
+	}
+	return nil
+}
+
+func (x LastPartySvc) SetSerialAtPlace(p struct {
+	Place  int
+	Serial string
+}, _ *struct{}) error {
+	var serial sql.NullInt64
+	if len(strings.TrimSpace(p.Serial)) > 0 {
+		n, err := strconv.ParseInt(p.Serial, 10, 64)
+		if err != nil {
+			return err
+		}
+		serial = sql.NullInt64{n, true}
+	}
+	product := data.GetProductAtPlace(p.Place)
+	product.Serial = serial
+	if err := data.DB.Save(&product); err != nil {
+		return err
+	}
+	//viewm.ResetProductAtPlace(p.Place)
+	return nil
+}
+
+func (x LastPartySvc) SetProductTypeAtPlace(p struct {
+	Place           int
+	ProductTypeName string
+}, _ *struct{}) error {
+
+	product := data.GetProductAtPlace(p.Place)
+	product.ProductTypeName.String = strings.TrimSpace(p.ProductTypeName)
+	product.ProductTypeName.Valid = len(product.ProductTypeName.String) > 0
+	if err := data.DB.Save(&product); err != nil {
+		return err
+	}
+	//viewm.ResetProductAtPlace(p.Place)
+	return nil
+}
+
+func (x LastPartySvc) SetPointsMethodAtPlace(a [2]int, _ *struct{}) error {
+
+	product := data.GetProductAtPlace(a[0])
+	switch a[1] {
+	case 1:
+		product.PointsMethod = sql.NullInt64{2, true}
+	case 2:
+		product.PointsMethod = sql.NullInt64{3, true}
+	default:
+		product.PointsMethod = sql.NullInt64{}
+	}
+	if err := data.DB.Save(&product); err != nil {
+		return err
+	}
+	//viewm.ResetProductAtPlace(a[0])
 	return nil
 }
 

@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/fpawel/elco.v2/internal/data"
-	"github.com/fpawel/elco.v2/internal/vmodel"
 	"github.com/lxn/walk"
 	"github.com/powerman/structlog"
 	"os"
@@ -55,8 +54,7 @@ func main() {
 }
 
 var (
-	lastPartyProducts = vmodel.NewProducts()
-	mw                = AppMainWindow{
+	mw = AppMainWindow{
 		DelayHelp: new(delayHelp),
 	}
 	cancelComport = func() {}
