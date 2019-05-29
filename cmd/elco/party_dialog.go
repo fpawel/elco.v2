@@ -17,7 +17,7 @@ func runPartyDialog() {
 		edNote     *walk.TextEdit
 	)
 
-	party := data.GetLastPartyWithProductsInfo(data.ProductsFilter{})
+	party := data.GetLastParty(data.WithProducts)
 
 	saveParty := func() {
 		if !saveOnEdit {

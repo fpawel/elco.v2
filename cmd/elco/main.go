@@ -37,6 +37,7 @@ func main() {
 	log := structlog.New()
 
 	data.Open(false)
+	defer log.ErrIfFail(data.Close)
 
 	app := walk.App()
 	app.SetOrganizationName("analitpribor")
@@ -44,12 +45,13 @@ func main() {
 	settings = walk.NewIniFileSettings("settings.ini")
 	log.ErrIfFail(settings.Load)
 	app.SetSettings(settings)
+	defer log.ErrIfFail(settings.Save)
+
+	closeHttpServer := startHttpServer()
+	defer closeHttpServer()
 
 	runMainWindow()
 
-	log.ErrIfFail(settings.Save)
-	log.ErrIfFail(data.Close)
-	formPartySerialsSetVisible(false)
 }
 
 var (

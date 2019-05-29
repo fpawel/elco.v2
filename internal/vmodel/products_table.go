@@ -7,13 +7,7 @@ import (
 
 type ProductsTable struct {
 	walk.ReflectTableModelBase
-	fields   []data.ProductField
-	m2       *PlacesTable
-	products []data.ProductInfo
-}
-
-func (x *ProductsTable) Fields() []data.ProductField {
-	return append([]data.ProductField{}, x.fields...)
+	m2 *PlacesTable
 }
 
 func (x *ProductsTable) ProductAt(place int) data.ProductInfo {

@@ -5,33 +5,18 @@ import (
 	"github.com/fpawel/elco.v2/internal/data"
 )
 
-type Products struct {
-	products []data.ProductInfo
-	m        *ProductsTable
-	m2       *PlacesTable
+func Products() []data.ProductInfo {
+	products := make([]data.ProductInfo, 96)
+	for _, p := range data.GetLastPartyProductsInfo() {
+		products[p.Place] = p
+	}
+	return products
 }
 
-func NewProducts() *Products {
-	x := &Products{
-		products: make([]data.ProductInfo, 96),
-	}
-
-	x.m = &ProductsTable{
-		products: x.products,
-	}
-	x.m2 = &PlacesTable{
-		products: x.products,
-		m:        x.m,
-	}
-	x.m.m2 = x.m2
-	return x
-}
-
-func (x *Products) Setup() {
-	for _, p := range data.GetLastPartyWithProductsInfo(data.ProductsFilter{}).Products {
-		x.products[p.Place] = p
-	}
-	x.m.fields = data.NotEmptyProductsFields(x.products)
+func (x *Products) InvalidateAtPlace(place int) {
+	x.products[place] = data.GetProductInfoAtPlace(place)
+	x.m.PublishRowChanged(place)
+	x.m2.PublishRowChanged(place / 8)
 }
 
 func (x *Products) Invalidate() {
@@ -46,10 +31,6 @@ func (x *Products) ProductsTable() *ProductsTable {
 
 func (x *Products) PlacesTable() *PlacesTable {
 	return x.m2
-}
-
-func (x *Products) Products() []data.ProductInfo {
-	return append([]data.ProductInfo{}, x.products...)
 }
 
 func (x *Products) SetProductSerialAt(place int, serial sql.NullInt64) error {

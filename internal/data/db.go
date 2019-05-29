@@ -17,6 +17,7 @@ var (
 	DB     *reform.DB
 	DBx    *sqlx.DB
 	dbConn *sql.DB
+	log    = structlog.New()
 )
 
 func Close() error {
@@ -50,7 +51,7 @@ func Open(createNew bool) {
 	if err = deleteEmptyParties(); err != nil {
 		panic(err)
 	}
-	structlog.New().Info("open sqlite db", "file", fileName)
+	log.Info(fileName)
 	DB = reform.NewDB(dbConn, sqlite3.Dialect, nil)
 	DBx = sqlx.NewDb(dbConn, "sqlite3")
 }

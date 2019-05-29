@@ -41,7 +41,7 @@ func runMainWindow() {
 	if err := (MainWindow{
 		AssignTo: &mw.w,
 		Title: "Партия ЭХЯ " + (func() string {
-			p := data.GetLastParty()
+			p := data.GetLastParty(data.WithoutProducts)
 			return fmt.Sprintf("№%d %s", p.PartyID, p.CreatedAt.Format("02.01.2006"))
 		}()),
 		Name:       "MainWindow",
@@ -96,13 +96,13 @@ func runMainWindow() {
 
 					ComboBox{
 						AssignTo: &cbWorks,
-						Model: []string{
-							"Опрос",
-							"Термокомпенсация",
-							"Погрешность",
-							"Прошивка",
-						},
-						CurrentIndex: 0,
+						//Model: []string{
+						//	"Опрос",
+						//	"Термокомпенсация",
+						//	"Погрешность",
+						//	"Прошивка",
+						//},
+						//CurrentIndex: 0,
 					},
 
 					VSpacer{MinSize: Size{3, 0}},
@@ -141,7 +141,7 @@ func runMainWindow() {
 						Image:       "img/edit25.png",
 						ToolTipText: "Ввод серийных номеров ЭХЯ",
 						OnClicked: func() {
-							formPartySerialsSetVisible(true)
+
 						},
 					},
 					ToolButton{

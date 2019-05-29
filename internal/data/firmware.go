@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/ansel1/merry"
 	"github.com/fpawel/comm/modbus"
-	"log"
 	"math"
 	"time"
 )

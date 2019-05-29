@@ -33,16 +33,20 @@ const (
 	ProductFieldNote
 )
 
-func NotEmptyProductsFields(products []ProductInfo) (fields []ProductField){
-	for f := ProductFieldPlace; f <= ProductFieldNote; f++{
-		for _,p := range products{
-			if p.FieldValue(f) != nil{
+func NotEmptyProductsFields(products []ProductInfo) (fields []ProductField) {
+	for f := ProductFieldPlace; f <= ProductFieldNote; f++ {
+		for _, p := range products {
+			if p.FieldValue(f) != nil {
 				fields = append(fields, f)
 				break
 			}
 		}
 	}
 	return
+}
+
+func LastPartyFields() []ProductField {
+	return NotEmptyProductsFields(GetLastPartyProductsInfo())
 }
 
 func (s ProductInfo) OkFieldValue(x ProductField) sql.NullBool {
@@ -55,11 +59,10 @@ func (s ProductInfo) OkFieldValue(x ProductField) sql.NullBool {
 		return okNullFloat(s.I13, s.OKMinFon20r, s.OKMaxFon20r)
 
 	case ProductFieldSens20:
-		return okNullFloat(s.ISPlus20, s.OKMinKSens20, s.OKMaxKSens20,)
+		return okNullFloat(s.ISPlus20, s.OKMinKSens20, s.OKMaxKSens20)
 
 	case ProductFieldKSens20:
-		return okNullFloat(s.KSens20, s.OKMinKSens20, s.OKMaxKSens20,)
-
+		return okNullFloat(s.KSens20, s.OKMinKSens20, s.OKMaxKSens20)
 
 	case ProductFieldFonMinus20:
 		return okNullFloat(s.IFMinus20, s.OKDFon20)
@@ -73,7 +76,6 @@ func (s ProductInfo) OkFieldValue(x ProductField) sql.NullBool {
 	case ProductFieldKSens50:
 		return okNullFloat(s.KSens50, s.OKMinKSens50, s.OKMaxKSens50)
 
-
 	case ProductFieldNotMeasured:
 		return okNullFloat(s.NotMeasured, s.OKDNotMeasured)
 
@@ -81,17 +83,16 @@ func (s ProductInfo) OkFieldValue(x ProductField) sql.NullBool {
 	return sql.NullBool{}
 }
 
-func okNullFloat(v sql.NullFloat64, args... bool) (r sql.NullBool) {
+func okNullFloat(v sql.NullFloat64, args ...bool) (r sql.NullBool) {
 	r.Valid = v.Valid
 	r.Bool = args[0]
-	for _,arg := range args[1:]{
+	for _, arg := range args[1:] {
 		r.Bool = r.Bool && arg
 	}
 	return
 }
 
-
-func (s ProductInfo) FieldValue(x ProductField) interface{}{
+func (s ProductInfo) FieldValue(x ProductField) interface{} {
 	switch x {
 	case ProductFieldPlace:
 		return fmt.Sprintf("%d.%d", s.Place/8+1, s.Place%8+1)
@@ -116,7 +117,6 @@ func (s ProductInfo) FieldValue(x ProductField) interface{}{
 
 	case ProductFieldKSens20:
 		return nullFloat(s.KSens20)
-
 
 	case ProductFieldFonMinus20:
 		return nullFloat(s.IFMinus20)
@@ -156,21 +156,21 @@ func (s ProductInfo) FieldValue(x ProductField) interface{}{
 	return nil
 }
 
-func nullFloat( x sql.NullFloat64) interface{}{
+func nullFloat(x sql.NullFloat64) interface{} {
 	if x.Valid {
 		return x.Float64
 	}
 	return nil
 }
 
-func nullInt64( x sql.NullInt64) interface{}{
+func nullInt64(x sql.NullInt64) interface{} {
 	if x.Valid {
 		return x.Int64
 	}
 	return nil
 }
 
-func nullStr( x sql.NullString) interface{}{
+func nullStr(x sql.NullString) interface{} {
 	if x.Valid {
 		return x.String
 	}
