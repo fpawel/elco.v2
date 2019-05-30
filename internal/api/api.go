@@ -57,7 +57,7 @@ func (x LastPartySvc) SetSerialAtPlace(p struct {
 	if err := data.DB.Save(&product); err != nil {
 		return err
 	}
-	//viewm.ResetProductAtPlace(p.Place)
+	//view.ResetProductAtPlace(p.Place)
 	return nil
 }
 
@@ -72,7 +72,7 @@ func (x LastPartySvc) SetProductTypeAtPlace(p struct {
 	if err := data.DB.Save(&product); err != nil {
 		return err
 	}
-	//viewm.ResetProductAtPlace(p.Place)
+	//view.ResetProductAtPlace(p.Place)
 	return nil
 }
 
@@ -90,7 +90,7 @@ func (x LastPartySvc) SetPointsMethodAtPlace(a [2]int, _ *struct{}) error {
 	if err := data.DB.Save(&product); err != nil {
 		return err
 	}
-	//viewm.ResetProductAtPlace(a[0])
+	//view.ResetProductAtPlace(a[0])
 	return nil
 }
 

@@ -1,11 +1,13 @@
-package main
+package view
 
 import (
+	"context"
 	"fmt"
 	"github.com/hako/durafmt"
 	"github.com/lxn/walk"
 	. "github.com/lxn/walk/declarative"
 	"github.com/powerman/structlog"
+	"sync"
 	"time"
 )
 
@@ -13,49 +15,51 @@ type delayHelp struct {
 	*walk.Composite
 	pb     *walk.ProgressBar
 	lbl    *walk.Label
-	ticker *time.Ticker
-	done   chan struct{}
+	cancel context.CancelFunc
+	ctx    context.Context
 }
 
-func (x *delayHelp) Show(what string, total time.Duration) {
+func (x *delayHelp) start(what string, total time.Duration, ctx context.Context) {
 
-	log := structlog.New("delay", what)
+	log := log.New("delay", what, "total_delay_duration", durafmt.Parse(total))
+	log.Info("begin", structlog.KeyTime, now())
 
-	startMoment := time.Now()
-	x.done = make(chan struct{}, 1)
-	x.ticker = time.NewTicker(time.Millisecond * 500)
+	var wg sync.WaitGroup
+	wg.Add(1)
 	x.Composite.Synchronize(func() {
-		x.SetVisible(true)
+		x.ctx, x.cancel = context.WithTimeout(ctx, total)
+		x.Composite.SetVisible(true)
 		x.pb.SetRange(0, int(total.Nanoseconds()/1000000))
 		x.pb.SetValue(0)
-		_ = x.lbl.SetText(fmt.Sprintf("%s: %s", what, durafmt.Parse(total)))
+		s := fmt.Sprintf("%s: %s", what, durafmt.Parse(total))
+		if err := x.lbl.SetText(s); err != nil {
+			panic(err)
+		}
+		wg.Done()
 	})
+	wg.Wait()
 
-	log.Info("begin", structlog.KeyTime, now())
 	go func() {
+		startMoment := time.Now()
+		ticker := time.NewTicker(time.Millisecond * 500)
 		defer func() {
+			ticker.Stop()
+			x.Composite.Synchronize(func() {
+				x.SetVisible(false)
+			})
 			log.Info("end", structlog.KeyTime, now())
 		}()
 		for {
 			select {
-			case <-x.ticker.C:
+			case <-ticker.C:
 				x.Composite.Synchronize(func() {
 					x.pb.SetValue(int(time.Since(startMoment).Nanoseconds() / 1000000))
 				})
-			case <-x.done:
+			case <-x.ctx.Done():
 				return
 			}
 		}
 	}()
-}
-
-func (x *delayHelp) Hide() {
-	x.ticker.Stop()
-	close(x.done)
-	x.Composite.Synchronize(func() {
-		x.SetVisible(false)
-	})
-
 }
 
 func (x *delayHelp) Widget() Widget {
@@ -80,7 +84,8 @@ func (x *delayHelp) Widget() Widget {
 			PushButton{
 				Text: "Продолжить без задержки",
 				OnClicked: func() {
-					skipDelay()
+					x.cancel()
+					log.Warn("задержка прервана", structlog.KeyTime, now())
 				},
 			},
 		},

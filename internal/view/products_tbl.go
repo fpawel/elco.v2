@@ -1,39 +1,34 @@
-package viewm
+package view
 
 import (
 	"github.com/fpawel/elco.v2/internal/data"
 	"github.com/lxn/walk"
 	"github.com/lxn/walk/declarative"
+	"os"
+	"path/filepath"
 )
 
 type ProductsTable struct {
 	walk.TableModelBase
 	products    []data.ProductInfo
 	fields      []data.ProductField
-	tableView   *walk.TableView
 	blocksTable *BlocksTable
 }
 
-func (x *ProductsTable) Setup(tableView *walk.TableView, blocksTable *BlocksTable) {
-	x.tableView = tableView
-	x.blocksTable = blocksTable
-	blocksTable.productsTable = x
+func newProductsModels() (*ProductsTable, *BlocksTable) {
+	x, y := new(ProductsTable), new(BlocksTable)
+	x.blocksTable = y
+	y.productsTable = x
+	x.setup()
+	return x, y
 }
 
-func (x *ProductsTable) Reset() {
+func (x *ProductsTable) setup() {
 	x.products = make([]data.ProductInfo, 96)
 	for _, p := range data.GetLastPartyProductsInfo() {
 		x.products[p.Place] = p
 	}
 	x.fields = data.NotEmptyProductsFields(x.products)
-
-	if x.tableView == nil {
-		return
-	}
-
-	x.resetColumns()
-	x.PublishRowsReset()
-	x.blocksTable.PublishRowsReset()
 }
 
 func (x *ProductsTable) ProductAtPlace(place int) data.ProductInfo {
@@ -52,9 +47,11 @@ func (x *ProductsTable) Columns() (columns []declarative.TableViewColumn) {
 	return
 }
 
-func (x *ProductsTable) resetColumns() {
+func (x *ProductsTable) Reset(tableView *walk.TableView) {
 
-	if err := x.tableView.Columns().Clear(); err != nil {
+	x.setup()
+
+	if err := tableView.Columns().Clear(); err != nil {
 		panic(err)
 	}
 	for _, c := range x.fields {
@@ -65,7 +62,7 @@ func (x *ProductsTable) resetColumns() {
 		if err := col.SetWidth(80); err != nil {
 			panic(err)
 		}
-		if err := x.tableView.Columns().Add(col); err != nil {
+		if err := tableView.Columns().Add(col); err != nil {
 			panic(err)
 		}
 		precision, f := productsColPrecision[c]
@@ -76,6 +73,9 @@ func (x *ProductsTable) resetColumns() {
 			panic(err)
 		}
 	}
+
+	x.PublishRowsReset()
+	x.blocksTable.PublishRowsReset()
 }
 
 func (x *ProductsTable) RowCount() int {
@@ -120,8 +120,6 @@ func (x *ProductsTable) SetChecked(row int, checked bool) error {
 	x.products[row].Place = row
 
 	x.blocksTable.PublishRowChanged(row / 8)
-	x.PublishRowChanged(row)
-
 	return nil
 }
 
@@ -145,7 +143,7 @@ func (x *ProductsTable) StyleCell(c *walk.CellStyle) {
 	switch field {
 	case data.ProductFieldPlace:
 		if p.HasFirmware {
-			c.Image = "img/check16.png"
+			c.Image = check16Png
 		}
 	case data.ProductFieldSerial:
 		c.Font = fontSerial
@@ -162,13 +160,27 @@ func (x *ProductsTable) StyleCell(c *walk.CellStyle) {
 	}
 }
 
-func init() {
-	fontSerial, _ = walk.NewFont("Segoe UI", 12, walk.FontItalic)
-	fontDefault, _ = walk.NewFont("Segoe UI", 12, 0)
+func newFont(family string, pointSize int, style walk.FontStyle) *walk.Font {
+	font, err := walk.NewFont(family, pointSize, style)
+	if err != nil {
+		panic(err)
+	}
+	return font
+}
+
+func newBitmapFromFile(filename string) walk.Image {
+	img, err := walk.NewImageFromFile(filepath.Join(filepath.Dir(os.Args[0]), "img", filename))
+	if err != nil {
+		panic(err)
+	}
+	return img
 }
 
 var (
-	fontSerial, fontDefault *walk.Font
+	fontSerial  = newFont("Segoe UI", 12, walk.FontItalic)
+	fontDefault = newFont("Segoe UI", 12, 0)
+
+	check16Png = newBitmapFromFile("check16.png")
 
 	productColName = map[data.ProductField]string{
 		data.ProductFieldPlace:        "№",

@@ -1,4 +1,4 @@
-package main
+package view
 
 import (
 	"github.com/fpawel/elco.v2/internal/data"
@@ -10,11 +10,9 @@ import (
 	"path/filepath"
 )
 
-type FirmwareDialog struct {
-	firmware struct {
-		store, calc, curr data.FirmwareBytes
-	}
-	w *walk.Dialog
+type firmwareDialog struct {
+	w                                         *walk.Dialog
+	storeFirmware, calcFirmware, currFirmware data.FirmwareBytes
 	rbStored,
 	rbCalculated *walk.RadioButton
 	neSerial,
@@ -26,7 +24,8 @@ type FirmwareDialog struct {
 	cbType,
 	cbGas,
 	cbUnits *walk.ComboBox
-	img *walk.ImageView
+	img     *walk.ImageView
+	product data.ProductInfo
 }
 
 func setComboBoxText(cb *walk.ComboBox, text string) error {
@@ -42,13 +41,13 @@ func imgChartFileName() string {
 	return filepath.Join(filepath.Dir(os.Args[0]), "chart.bmp")
 }
 
-func (x *FirmwareDialog) saveChartToFile() {
+func (x *firmwareDialog) saveChartToFile() {
 	imgChartFileName := imgChartFileName()
 	out, err := os.Create(imgChartFileName)
 	if err != nil {
 		panic(err)
 	}
-	imgChart := imgchart.New(x.firmware.curr, 600, 350)
+	imgChart := imgchart.New(x.currFirmware, 600, 350)
 	if err := bmp.Encode(out, imgChart); err != nil {
 		panic(err)
 	}
@@ -57,28 +56,40 @@ func (x *FirmwareDialog) saveChartToFile() {
 	}
 }
 
-func runFirmwareDialog(product data.ProductInfo) {
-
-	x := new(FirmwareDialog)
-	x.firmware.calc = make(data.FirmwareBytes, data.FirmwareSize)
-	x.firmware.store = make(data.FirmwareBytes, data.FirmwareSize)
-
-	for i := range x.firmware.calc {
-		x.firmware.calc[i] = 0xFF
-		x.firmware.store[i] = 0xFF
+func newFirmwareBytes() data.FirmwareBytes {
+	x := make(data.FirmwareBytes, data.FirmwareSize)
+	for i := range x {
+		x[i] = 0xFF
 	}
-	if product.HasFirmware {
-		x.firmware.store = data.FirmwareBytes(data.GetProductByProductID(product.ProductID).Firmware)
-	}
-	if b, err := product.Firmware(); err == nil {
-		x.firmware.calc = b.Bytes()
-	}
-
-	x.run(product)
+	return x
 }
 
-func (x *FirmwareDialog) invalidate() {
-	i := x.firmware.curr.FirmwareInfo(x.cbPlace.CurrentIndex())
+func runFirmwareDialog(owner walk.Form, product data.ProductInfo) {
+
+	x := &firmwareDialog{
+		product:       product,
+		storeFirmware: newFirmwareBytes(),
+		calcFirmware:  newFirmwareBytes(),
+	}
+
+	if x.product.HasFirmware {
+		x.storeFirmware = data.FirmwareBytes(data.GetProductByProductID(product.ProductID).Firmware)
+	}
+	if b, err := product.Firmware(); err == nil {
+		x.calcFirmware = b.Bytes()
+	}
+
+	if x.product.HasFirmware {
+		x.currFirmware = append(data.FirmwareBytes{}, x.storeFirmware...)
+	} else {
+		x.currFirmware = append(data.FirmwareBytes{}, x.calcFirmware...)
+	}
+	x.saveChartToFile()
+	x.run(owner)
+}
+
+func (x *firmwareDialog) invalidate() {
+	i := x.currFirmware.FirmwareInfo(x.cbPlace.CurrentIndex())
 	for _, err := range []error{
 		x.edDate.SetDate(i.Time),
 		x.neSerial.SetValue(float64(i.Serial)),
@@ -104,31 +115,21 @@ func (x *FirmwareDialog) invalidate() {
 
 }
 
-func (x *FirmwareDialog) run(product data.ProductInfo) {
+func (x *firmwareDialog) rbFirmwareInfoSourceClick() {
+	if x.rbStored.Checked() {
+		x.currFirmware = append(data.FirmwareBytes{}, x.storeFirmware...)
+	} else {
+		x.currFirmware = append(data.FirmwareBytes{}, x.calcFirmware...)
+	}
+	x.invalidate()
+}
 
+func (x *firmwareDialog) dialog() Dialog {
 	var places []string
 	for i := 0; i < 96; i++ {
 		places = append(places, data.FormatPlace(i))
 	}
-
-	rbFirmwareInfoSourceClick := func() {
-
-		if x.rbStored.Checked() {
-			x.firmware.curr = append(data.FirmwareBytes{}, x.firmware.store...)
-		} else {
-			x.firmware.curr = append(data.FirmwareBytes{}, x.firmware.calc...)
-		}
-		x.invalidate()
-	}
-
-	if product.HasFirmware {
-		x.firmware.curr = append(data.FirmwareBytes{}, x.firmware.store...)
-	} else {
-		x.firmware.curr = append(data.FirmwareBytes{}, x.firmware.calc...)
-	}
-	x.saveChartToFile()
-
-	if err := (Dialog{
+	return Dialog{
 		AssignTo:   &x.w,
 		Layout:     VBox{},
 		Background: SolidColorBrush{Color: walk.RGB(255, 255, 255)},
@@ -147,7 +148,7 @@ func (x *FirmwareDialog) run(product data.ProductInfo) {
 							ComboBox{
 								AssignTo: &x.cbPlace,
 								Model:    places,
-								Value:    data.FormatPlace(product.Place),
+								Value:    data.FormatPlace(x.product.Place),
 							},
 
 							Label{
@@ -242,12 +243,12 @@ func (x *FirmwareDialog) run(product data.ProductInfo) {
 							RadioButton{
 								Text:      "Записано",
 								AssignTo:  &x.rbStored,
-								OnClicked: rbFirmwareInfoSourceClick,
+								OnClicked: x.rbFirmwareInfoSourceClick,
 							},
 							RadioButton{
 								AssignTo:  &x.rbCalculated,
 								Text:      "Расчитано",
-								OnClicked: rbFirmwareInfoSourceClick,
+								OnClicked: x.rbFirmwareInfoSourceClick,
 							},
 						},
 					},
@@ -259,13 +260,17 @@ func (x *FirmwareDialog) run(product data.ProductInfo) {
 				//Image: "chart.bmp",
 			},
 		},
-	}).Create(mw.w); err != nil {
+	}
+}
+
+func (x *firmwareDialog) run(owner walk.Form) {
+
+	if err := x.dialog().Create(owner); err != nil {
 		panic(err)
 	}
-	x.w.SetFont(mw.w.Font())
-
-	x.rbStored.SetChecked(product.HasFirmware)
-	x.rbCalculated.SetChecked(!product.HasFirmware)
+	x.w.SetFont(owner.Font())
+	x.rbStored.SetChecked(x.product.HasFirmware)
+	x.rbCalculated.SetChecked(!x.product.HasFirmware)
 	x.invalidate()
 	x.w.Run()
 	x.w.Close(0)

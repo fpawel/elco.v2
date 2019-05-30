@@ -1,8 +1,8 @@
 package main
 
 import (
+	"github.com/fpawel/elco.v2/internal/app"
 	"github.com/fpawel/elco.v2/internal/data"
-	"github.com/lxn/walk"
 	"github.com/powerman/structlog"
 	"os"
 	"path/filepath"
@@ -33,32 +33,17 @@ func main() {
 			"работа":            " %[1]s=`%[2]s`",
 		}).SetTimeFormat("15:04:05")
 
-	log := structlog.New()
-
 	data.Open(false)
 	defer log.ErrIfFail(data.Close)
-
-	app := walk.App()
-	app.SetOrganizationName("analitpribor")
-	app.SetProductName("elco")
-	settings = walk.NewIniFileSettings("settings.ini")
-	log.ErrIfFail(settings.Load)
-	app.SetSettings(settings)
-	defer log.ErrIfFail(settings.Save)
 
 	closeHttpServer := startHttpServer()
 	defer closeHttpServer()
 
-	runMainWindow()
-
+	app.Run()
 }
 
 var (
-	mw = AppMainWindow{
-		DelayHelp: new(delayHelp),
-	}
 	cancelComport = func() {}
 	skipDelay     = func() {}
-	settings      *walk.IniFileSettings
 	log           = structlog.New()
 )

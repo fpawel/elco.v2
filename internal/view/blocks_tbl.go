@@ -1,4 +1,4 @@
-package viewm
+package view
 
 import (
 	"fmt"
@@ -43,7 +43,5 @@ func (x *BlocksTable) SetChecked(row int, checked bool) error {
 	}
 
 	x.productsTable.PublishRowsReset()
-	x.PublishRowChanged(row)
-
 	return nil
 }
