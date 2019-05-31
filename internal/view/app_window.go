@@ -2,10 +2,11 @@ package view
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"github.com/ansel1/merry"
+	"github.com/fpawel/comm"
 	"github.com/fpawel/elco.v2/internal/data"
+	"github.com/hako/durafmt"
 	"github.com/lxn/walk"
 	. "github.com/lxn/walk/declarative"
 	"github.com/lxn/win"
@@ -18,6 +19,7 @@ type AppWindow struct {
 	w *walk.MainWindow
 	tblProducts,
 	tblJournal *walk.TableView
+	gbBlocks *walk.GroupBox
 	lblWork,
 	lblWorkTime *walk.Label
 	delayHelp      *delayHelp
@@ -25,8 +27,6 @@ type AppWindow struct {
 	blocksTblMdl   *BlocksTable
 	journal        *Journal
 	cancelWork     context.CancelFunc
-
-	DoMainWork func(mainWorkIndex int) error
 
 	enableOnWork, visibleOnWork []visWidget
 
@@ -37,40 +37,51 @@ type AppWindow struct {
 	cbWorks    *walk.ComboBox
 	panelTools *walk.ScrollView
 
-	ctx    context.Context
-	works  []Work
-	doWork func(Work) error
+	ctxWork, ctxDelay context.Context
+	works             []NamedWork
+	doWork            func(NamedWork) error
 }
 
-type Work struct {
+type NamedWork struct {
 	Name string
-	Func func() error
+	Work Work
 }
+
+type Work func() error
+
+type CtxType int
+
+const (
+	CtxWork CtxType = iota
+	CtxDelay
+)
 
 type visWidget struct {
 	*walk.WindowBase
 	V bool
 }
 
-func NewAppMainWindow(doWork func(Work) error, works []Work) *AppWindow {
+func NewAppMainWindow(doWork func(NamedWork) error, works []NamedWork) *AppWindow {
 	x := &AppWindow{
 		delayHelp:  new(delayHelp),
 		cancelWork: func() {},
-		DoMainWork: func(mainWorkIndex int) error {
-			time.Sleep(2 * time.Second)
-			return errors.New("not implemented")
-		},
-		journal: new(Journal),
-		works:   works,
-		doWork:  doWork,
+		journal:    new(Journal),
+		works:      works,
+		doWork:     doWork,
 	}
 	x.productsTblMdl, x.blocksTblMdl = newProductsModels()
 	return x
 }
 
-func (x *AppWindow) showErr(title, text string) {
+func (x *AppWindow) showErr(title string, err error) {
+
+	if merry.Is(err, context.Canceled) {
+		log.Warn("выполнение прервано")
+		return
+	}
+
 	walk.MsgBox(x.w, title,
-		text, walk.MsgBoxIconError|walk.MsgBoxOK)
+		err.Error(), walk.MsgBoxIconError|walk.MsgBoxOK)
 }
 
 func (x *AppWindow) AddJournalRecord(logLevel LogLevel, text string) {
@@ -83,24 +94,50 @@ func (x *AppWindow) AddJournalRecord(logLevel LogLevel, text string) {
 	x.tblJournal.EnsureItemVisible(len(x.journal.entries) - 1)
 }
 
-func (x *AppWindow) Ctx() (ctx context.Context) {
+func (x *AppWindow) Ctx(ctx CtxType) context.Context {
+	ch := make(chan context.Context)
+	x.w.Synchronize(func() {
+		switch ctx {
+		case CtxWork:
+			ch <- x.ctxWork
+		case CtxDelay:
+			ch <- x.ctxDelay
+		default:
+			panic(ctx)
+		}
+	})
+	return <-ch
+}
+
+func (x *AppWindow) SynchronizeStrong(f func()) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	x.w.Synchronize(func() {
-		ctx = x.ctx
-		if x.delayHelp.Composite.Visible() {
-			ctx = x.delayHelp.ctx
-		}
+		f()
 		wg.Done()
 	})
-	return
+	wg.Wait()
 }
 
-func (x *AppWindow) StartDelay(what string, duration time.Duration) {
-
+func (x *AppWindow) RunDelay(what string, duration time.Duration) {
+	log := comm.LogWithKeys(log, "delay", what, "total_delay_duration", durafmt.Parse(duration))
+	log.Info("begin", structlog.KeyTime, now())
+	x.SynchronizeStrong(func() {
+		x.ctxDelay, x.delayHelp.skip = context.WithTimeout(x.ctxWork, duration)
+		x.delayHelp.show(what, duration)
+		go func() {
+			x.delayHelp.run(x.ctxDelay.Done())
+			log.Debug("end")
+		}()
+	})
 }
 
 func (x *AppWindow) window() MainWindow {
+
+	var works []string
+	for _, y := range x.works {
+		works = append(works, y.Name)
+	}
 
 	window := MainWindow{
 		AssignTo: &x.w,
@@ -175,16 +212,15 @@ func (x *AppWindow) window() MainWindow {
 								panic("already started")
 							}
 							x.workStarted = true
-							x.ctx, x.cancelWork = context.WithCancel(context.Background())
+							x.ctxWork, x.cancelWork = context.WithCancel(context.Background())
 
 							workIndex := x.cbWorks.CurrentIndex()
-							workName := x.cbWorks.Model().([]string)[workIndex]
-
-							x.AddJournalRecord(INF, fmt.Sprintf("%v: начало выполнения", workName))
+							work := x.works[workIndex]
+							x.AddJournalRecord(INF, fmt.Sprintf("%v: начало выполнения", work.Name))
 
 							go func() {
 
-								err := x.DoMainWork(workIndex)
+								err := x.doWork(work)
 
 								x.w.Synchronize(func() {
 
@@ -200,12 +236,12 @@ func (x *AppWindow) window() MainWindow {
 									if err != nil {
 										if merry.Is(err, context.Canceled) {
 											//dafMainWindow.SetWorkStatus(walk.RGB(139, 69, 19), what+": прервано")
-											x.AddJournalRecord(WRN, fmt.Sprintf("%v: выполнение прервано", workName))
+											x.AddJournalRecord(WRN, fmt.Sprintf("%v: выполнение прервано", work.Name))
 										} else {
 											//dafMainWindow.SetWorkStatus(walk.RGB(255, 0, 0), what+": "+err.Error())
 											//log.PrintErr(err)
-											x.AddJournalRecord(ERR, fmt.Sprintf("%v: произошла ошибка: %v", workName, err))
-											x.showErr(workName, err.Error())
+											x.AddJournalRecord(ERR, fmt.Sprintf("%v: произошла ошибка: %v", work.Name, err))
+											x.showErr(work.Name, err)
 										}
 
 									} else {
@@ -228,13 +264,8 @@ func (x *AppWindow) window() MainWindow {
 					},
 					VSpacer{MinSize: Size{3, 0}},
 					ComboBox{
-						AssignTo: &x.cbWorks,
-						Model: []string{
-							"Опрос",
-							"Термокомпенсация",
-							"Погрешность",
-							"Прошивка",
-						},
+						AssignTo:     &x.cbWorks,
+						Model:        works,
 						CurrentIndex: 0,
 					},
 
@@ -245,7 +276,7 @@ func (x *AppWindow) window() MainWindow {
 					Label{
 						AssignTo: &x.lblWork,
 					},
-					x.delay.Widget(),
+					x.delayHelp.Widget(),
 					ScrollView{
 						VerticalFixed: true,
 						Layout:        Grid{},
@@ -306,8 +337,9 @@ func (x *AppWindow) window() MainWindow {
 						Layout: VBox{MarginsZero: true, SpacingZero: true},
 						Children: []Widget{
 							GroupBox{
-								Layout: Grid{},
-								Title:  "Опрос",
+								AssignTo: &x.gbBlocks,
+								Layout:   Grid{},
+								Title:    "Опрос",
 								Children: []Widget{
 									TableView{
 										Model:      x.blocksTblMdl,
@@ -372,7 +404,6 @@ func (x *AppWindow) window() MainWindow {
 			},
 		},
 	}
-
 	return window
 }
 
@@ -406,6 +437,24 @@ func (x *AppWindow) Run() {
 
 func (x *AppWindow) resetProductsView() {
 	x.productsTblMdl.Reset(x.tblProducts)
+}
+
+func (x *AppWindow) SetInterrogateBlockValues(block int, values []float64) {
+
+	x.w.Synchronize(func() {
+		s := fmt.Sprintf("Опрос: %s блок %d : %v",
+			time.Now().Format("15:04:05"),
+			block,
+			values)
+		if err := x.gbBlocks.SetTitle(s); err != nil {
+			panic(err)
+		}
+		for n := 0; n < 8; n++ {
+			x.blocksTblMdl.values[block*8+n] = &values[n]
+		}
+		x.productsTblMdl.PublishRowsReset()
+		x.blocksTblMdl.PublishRowsReset()
+	})
 }
 
 var log = structlog.New()

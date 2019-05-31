@@ -3,6 +3,7 @@ package view
 import (
 	"database/sql"
 	"github.com/fpawel/comm/comport"
+	"github.com/fpawel/elco.v2/internal/cfg"
 	"github.com/fpawel/elco.v2/internal/data"
 	"github.com/lxn/walk"
 	. "github.com/lxn/walk/declarative"
@@ -167,9 +168,9 @@ func (x *AppWindow) runSettingsDialog() {
 								Title:  "СОМ порт",
 								Children: []Widget{
 									Label{Text: "Блок измерения"},
-									comboBoxComport(&cbComport, "Comport"),
+									comboBoxComport(&cbComport, cfg.ComportKey),
 									Label{Text: "Газовый блок"},
-									comboBoxComport(&cbComportGas, "ComportGas"),
+									comboBoxComport(&cbComportGas, cfg.ComportGasKey),
 								},
 							},
 
@@ -217,15 +218,19 @@ func comboBoxComport(comboBox **walk.ComboBox, key string) ComboBox {
 	return ComboBox{
 		AssignTo:     comboBox,
 		Model:        getComports(),
-		CurrentIndex: comportIndex(getIniStr(key)),
+		CurrentIndex: comportIndex(cfg.Str(key)),
 		OnMouseDown: func(_, _ int, _ walk.MouseButton) {
 			cb := *comboBox
 			n := cb.CurrentIndex()
-			_ = cb.SetModel(getComports())
-			_ = cb.SetCurrentIndex(n)
+			if err := cb.SetModel(getComports()); err != nil {
+				panic(err)
+			}
+			if err := cb.SetCurrentIndex(n); err != nil {
+				panic(err)
+			}
 		},
 		OnCurrentIndexChanged: func() {
-			putIniStr(key, (*comboBox).Text())
+			cfg.PutStr(key, (*comboBox).Text())
 		},
 	}
 }
@@ -234,22 +239,10 @@ func comboBox(comboBox **walk.ComboBox, key string, model []string) ComboBox {
 	return ComboBox{
 		AssignTo:     comboBox,
 		Model:        model,
-		CurrentIndex: comboBoxIndex(getIniStr(key), model),
+		CurrentIndex: comboBoxIndex(cfg.Str(key), model),
 		OnCurrentIndexChanged: func() {
-			putIniStr(key, (*comboBox).Text())
+			cfg.PutStr(key, (*comboBox).Text())
 		},
-	}
-}
-
-func getIniStr(key string) string {
-
-	s, _ := walk.App().Settings().Get(key)
-	return s
-}
-
-func putIniStr(key, value string) {
-	if err := walk.App().Settings().Put(key, value); err != nil {
-		panic(err)
 	}
 }
 

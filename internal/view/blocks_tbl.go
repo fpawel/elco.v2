@@ -9,6 +9,7 @@ import (
 type BlocksTable struct {
 	walk.TableModelBase
 	productsTable *ProductsTable
+	values        [96]*float64
 }
 
 func (x *BlocksTable) RowCount() int {
@@ -16,9 +17,16 @@ func (x *BlocksTable) RowCount() int {
 }
 
 func (x *BlocksTable) Value(row, col int) interface{} {
+
 	if col == 0 {
 		return fmt.Sprintf("Блок %d", row+1)
 	}
+
+	n := row*8 + (col - 1)
+	if n < 96 && x.values[n] != nil {
+		return *x.values[n]
+	}
+
 	return ""
 }
 
