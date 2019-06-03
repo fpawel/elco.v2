@@ -20,6 +20,9 @@ import (
 func Run() {
 	MainWindow = view.NewAppMainWindow(doWork, []view.NamedWork{
 		{"Опрос", interrogate},
+		{"Задержка", func() error {
+			return delay("Задержка", 2*time.Minute)
+		}},
 	})
 	MainWindow.Run()
 }
@@ -71,6 +74,7 @@ func delay(what string, duration time.Duration) error {
 	origLog := log
 	defer func() {
 		log = origLog
+		MainWindow.SkipDelay()
 	}()
 	log = comm.LogWithKeys(log,
 		"фоновый_опрос", what,
@@ -90,30 +94,12 @@ func delay(what string, duration time.Duration) error {
 			if ctxDelay.Err() != nil {
 				return nil
 			}
-			if isFailWork(err) {
+			if err != nil {
 				return err
 			}
-
-			timer := time.NewTimer(1 * time.Second)
-			for {
-				select {
-				case <-timer.C:
-					break
-				case <-ctxDelay.Done():
-					timer.Stop()
-					return nil
-				}
-			}
+			pause(time.Second, ctxDelay.Done())
 		}
 	}
-}
-
-func isFailWork(err error) bool {
-	return err != nil && !isDeviceError(err)
-}
-
-func isDeviceError(err error) bool {
-	return merry.Is(err, comm.ErrProtocol) || merry.Is(err, context.DeadlineExceeded)
 }
 
 func groupProductsByBlocks(ps []data.Product) (gs [][]*data.Product) {

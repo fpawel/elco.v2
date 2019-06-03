@@ -2,46 +2,54 @@ package view
 
 import (
 	"context"
-	"fmt"
-	"github.com/hako/durafmt"
 	"github.com/lxn/walk"
 	. "github.com/lxn/walk/declarative"
-	"github.com/powerman/structlog"
 	"time"
 )
 
 type delayHelp struct {
-	*walk.Composite
-	pb   *walk.ProgressBar
-	lbl  *walk.Label
-	skip context.CancelFunc
+	placeholder                   *walk.ScrollView
+	pb                            *walk.ProgressBar
+	lblWhat, lblTotal, lblElapsed *walk.Label
+	skip                          context.CancelFunc
 }
 
 func (x *delayHelp) show(what string, total time.Duration) {
 
-	x.Composite.SetVisible(true)
+	x.placeholder.SetVisible(true)
 	x.pb.SetRange(0, int(total.Nanoseconds()/1000000))
 	x.pb.SetValue(0)
-	s := fmt.Sprintf("%s: %s", what, durafmt.Parse(total))
-	if err := x.lbl.SetText(s); err != nil {
+
+	if err := x.lblWhat.SetText(what); err != nil {
 		panic(err)
 	}
+	if err := x.lblTotal.SetText(fmtDuration(total)); err != nil {
+		panic(err)
+	}
+	if err := x.lblElapsed.SetText("00:00:00"); err != nil {
+		panic(err)
+	}
+
 }
 
 func (x *delayHelp) run(done <-chan struct{}) {
 	startMoment := time.Now()
-	ticker := time.NewTicker(time.Millisecond * 500)
+	ticker := time.NewTicker(time.Second)
 	defer func() {
 		ticker.Stop()
-		x.Composite.Synchronize(func() {
-			x.SetVisible(false)
+		x.placeholder.Synchronize(func() {
+			x.placeholder.SetVisible(false)
 		})
 	}()
 	for {
 		select {
 		case <-ticker.C:
-			x.Composite.Synchronize(func() {
+			x.placeholder.Synchronize(func() {
 				x.pb.SetValue(int(time.Since(startMoment).Nanoseconds() / 1000000))
+				if err := x.lblElapsed.SetText(fmtDuration(time.Since(startMoment))); err != nil {
+					log.PrintErr(err)
+					return
+				}
 			})
 		case <-done:
 			return
@@ -50,29 +58,52 @@ func (x *delayHelp) run(done <-chan struct{}) {
 }
 
 func (x *delayHelp) Widget() Widget {
-	return Composite{
-		AssignTo: &x.Composite,
-		Layout:   HBox{},
-		Visible:  false,
+	return ScrollView{
+		Layout:        HBox{SpacingZero: true, MarginsZero: true},
+		VerticalFixed: true,
 		Children: []Widget{
-			Label{AssignTo: &x.lbl},
+
 			ScrollView{
-				Layout:        VBox{SpacingZero: true, MarginsZero: true},
+				AssignTo:      &x.placeholder,
+				Visible:       false,
+				Layout:        HBox{Spacing: 10, Margins: Margins{Left: 10, Right: 2}},
 				VerticalFixed: true,
 				Children: []Widget{
-					ProgressBar{
-						AssignTo: &x.pb,
-						MaxSize:  Size{0, 15},
-						MinSize:  Size{0, 15},
+					Label{
+						AssignTo:  &x.lblWhat,
+						TextColor: walk.RGB(0, 0, 128),
 					},
-				},
-			},
+					Label{
+						AssignTo:  &x.lblElapsed,
+						TextColor: walk.RGB(139, 0, 0),
+					},
+					Label{
+						Text:      ":",
+						TextColor: walk.RGB(0, 0, 128),
+					},
+					Label{
+						AssignTo:  &x.lblTotal,
+						TextColor: walk.RGB(0, 0, 128),
+					},
+					Composite{
+						Layout: VBox{MarginsZero: true, SpacingZero: true},
+						Children: []Widget{
+							ProgressBar{
+								AssignTo: &x.pb,
+								MaxSize:  Size{0, 15},
+								MinSize:  Size{0, 15},
+							},
+						},
+					},
 
-			PushButton{
-				Text: "Продолжить без задержки",
-				OnClicked: func() {
-					x.skip()
-					log.Warn("задержка прервана", structlog.KeyTime, now())
+					ToolButton{
+						Image:       "img/skip25.png",
+						ToolTipText: "Продолжить без задержки",
+						OnClicked: func() {
+							log.Info("пользователь прервал задержку")
+							x.skip()
+						},
+					},
 				},
 			},
 		},

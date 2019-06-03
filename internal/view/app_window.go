@@ -30,7 +30,7 @@ type AppWindow struct {
 
 	enableOnWork, visibleOnWork []visWidget
 
-	workStarted bool
+	workStarted, closing bool
 
 	tbStop,
 	tbStart, tbNewParty *walk.ToolButton
@@ -63,7 +63,7 @@ type visWidget struct {
 
 func NewAppMainWindow(doWork func(NamedWork) error, works []NamedWork) *AppWindow {
 	x := &AppWindow{
-		delayHelp:  new(delayHelp),
+		delayHelp:  &delayHelp{skip: func() {}},
 		cancelWork: func() {},
 		journal:    new(Journal),
 		works:      works,
@@ -119,6 +119,10 @@ func (x *AppWindow) SynchronizeStrong(f func()) {
 	wg.Wait()
 }
 
+func (x *AppWindow) SkipDelay() {
+	x.SynchronizeStrong(x.delayHelp.skip)
+}
+
 func (x *AppWindow) RunDelay(what string, duration time.Duration) {
 	log := comm.LogWithKeys(log, "delay", what, "total_delay_duration", durafmt.Parse(duration))
 	log.Info("begin", structlog.KeyTime, now())
@@ -139,7 +143,7 @@ func (x *AppWindow) window() MainWindow {
 		works = append(works, y.Name)
 	}
 
-	window := MainWindow{
+	return MainWindow{
 		AssignTo: &x.w,
 		Title: "Партия ЭХЯ " + (func() string {
 			p := data.GetLastParty(data.WithoutProducts)
@@ -199,58 +203,7 @@ func (x *AppWindow) window() MainWindow {
 						Text:        "Начать выполнение выбранной операции",
 						Image:       "img/start25.png",
 						ToolTipText: "Начать выполнение выбранной операции",
-						OnClicked: func() {
-
-							for _, y := range x.enableOnWork {
-								y.WindowBase.SetEnabled(y.V)
-							}
-							for _, y := range x.visibleOnWork {
-								y.WindowBase.SetVisible(y.V)
-							}
-
-							if x.workStarted {
-								panic("already started")
-							}
-							x.workStarted = true
-							x.ctxWork, x.cancelWork = context.WithCancel(context.Background())
-
-							workIndex := x.cbWorks.CurrentIndex()
-							work := x.works[workIndex]
-							x.AddJournalRecord(INF, fmt.Sprintf("%v: начало выполнения", work.Name))
-
-							go func() {
-
-								err := x.doWork(work)
-
-								x.w.Synchronize(func() {
-
-									x.workStarted = false
-
-									for _, y := range x.enableOnWork {
-										y.WindowBase.SetEnabled(!y.V)
-									}
-									for _, y := range x.visibleOnWork {
-										y.WindowBase.SetVisible(!y.V)
-									}
-
-									if err != nil {
-										if merry.Is(err, context.Canceled) {
-											//dafMainWindow.SetWorkStatus(walk.RGB(139, 69, 19), what+": прервано")
-											x.AddJournalRecord(WRN, fmt.Sprintf("%v: выполнение прервано", work.Name))
-										} else {
-											//dafMainWindow.SetWorkStatus(walk.RGB(255, 0, 0), what+": "+err.Error())
-											//log.PrintErr(err)
-											x.AddJournalRecord(ERR, fmt.Sprintf("%v: произошла ошибка: %v", work.Name, err))
-											x.showErr(work.Name, err)
-										}
-
-									} else {
-										//dafMainWindow.SetWorkStatus(ColorNavy, workName+": выполнено")
-									}
-
-								})
-							}()
-						},
+						OnClicked:   x.runMainWork,
 					},
 					ToolButton{
 						AssignTo:    &x.tbStop,
@@ -259,6 +212,7 @@ func (x *AppWindow) window() MainWindow {
 						Image:       "img/stop25.png",
 						ToolTipText: "Прервать выполнение операции",
 						OnClicked: func() {
+							log.Info("Пользователь прервал выполнение работы")
 							x.cancelWork()
 						},
 					},
@@ -277,10 +231,7 @@ func (x *AppWindow) window() MainWindow {
 						AssignTo: &x.lblWork,
 					},
 					x.delayHelp.Widget(),
-					ScrollView{
-						VerticalFixed: true,
-						Layout:        Grid{},
-					},
+
 					ToolButton{
 						Text:        "Ввод серийных номеров ЭХЯ",
 						Image:       "img/edit25.png",
@@ -377,8 +328,9 @@ func (x *AppWindow) window() MainWindow {
 								},
 							},
 							GroupBox{
-								Title:  "Журнал",
-								Layout: Grid{},
+								MaxSize: Size{0, 200},
+								Title:   "Журнал",
+								Layout:  Grid{},
 								Children: []Widget{
 									TableView{
 										AssignTo: &x.tblJournal,
@@ -404,7 +356,6 @@ func (x *AppWindow) window() MainWindow {
 			},
 		},
 	}
-	return window
 }
 
 func (x *AppWindow) Run() {
@@ -432,7 +383,72 @@ func (x *AppWindow) Run() {
 		{&x.cbWorks.WindowBase, false},
 	}
 
+	x.w.Closing().Attach(func(canceled *bool, reason walk.CloseReason) {
+		if !x.workStarted {
+			return
+		}
+		*canceled = true
+		x.closing = true
+		x.cancelWork()
+		log.Info("работа прервана, пользователь закрыл приложение")
+	})
+
 	x.w.Run()
+}
+
+func (x *AppWindow) runMainWork() {
+
+	for _, y := range x.enableOnWork {
+		y.WindowBase.SetEnabled(y.V)
+	}
+	for _, y := range x.visibleOnWork {
+		y.WindowBase.SetVisible(y.V)
+	}
+
+	if x.workStarted {
+		panic("already started")
+	}
+	x.workStarted = true
+	x.ctxWork, x.cancelWork = context.WithCancel(context.Background())
+
+	workIndex := x.cbWorks.CurrentIndex()
+	work := x.works[workIndex]
+	x.AddJournalRecord(INF, fmt.Sprintf("%v: начало выполнения", work.Name))
+
+	go func() {
+
+		err := x.doWork(work)
+
+		x.w.Synchronize(func() {
+
+			x.workStarted = false
+
+			if x.closing {
+				log.ErrIfFail(x.w.Close)
+				return
+			}
+
+			for _, y := range x.enableOnWork {
+				y.WindowBase.SetEnabled(!y.V)
+			}
+			for _, y := range x.visibleOnWork {
+				y.WindowBase.SetVisible(!y.V)
+			}
+			if err == nil {
+				x.AddJournalRecord(INF, fmt.Sprintf("%v: выполнено", work.Name))
+				return
+			}
+			if merry.Is(err, context.Canceled) {
+				x.AddJournalRecord(WRN, fmt.Sprintf("%v: выполнение прервано", work.Name))
+				return
+			}
+
+			x.AddJournalRecord(ERR, fmt.Sprintf("%v: %v", work.Name, err))
+
+			x.showErr(work.Name, err)
+
+		})
+	}()
 }
 
 func (x *AppWindow) resetProductsView() {
@@ -440,7 +456,6 @@ func (x *AppWindow) resetProductsView() {
 }
 
 func (x *AppWindow) SetInterrogateBlockValues(block int, values []float64) {
-
 	x.w.Synchronize(func() {
 		s := fmt.Sprintf("Опрос: %s блок %d : %v",
 			time.Now().Format("15:04:05"),
