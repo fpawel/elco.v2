@@ -4,7 +4,6 @@ import (
 	"context"
 	"github.com/fpawel/comm"
 	"github.com/fpawel/comm/comport"
-	"github.com/fpawel/elco.v2/internal/cfg"
 	"github.com/fpawel/elco.v2/internal/view"
 	"github.com/lxn/walk"
 	"github.com/powerman/structlog"
@@ -21,7 +20,7 @@ type reader struct {
 func readerMeasure(ctx context.Context) reader {
 	return reader{
 		ctx:         ctx,
-		portNameKey: cfg.ComportKey,
+		portNameKey: view.ComportKey,
 		comport:     comportMeasure,
 		config: comm.Config{
 			ReadByteTimeoutMillis: 15,
@@ -34,7 +33,7 @@ func readerMeasure(ctx context.Context) reader {
 func readerGas() reader {
 	return reader{
 		ctx:         MainWindow.Ctx(view.CtxWork),
-		portNameKey: cfg.ComportGasKey,
+		portNameKey: view.ComportGasKey,
 		comport:     comportGas,
 		config: comm.Config{
 			ReadByteTimeoutMillis: 50,

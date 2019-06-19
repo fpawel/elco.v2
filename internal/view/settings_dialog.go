@@ -2,12 +2,17 @@ package view
 
 import (
 	"database/sql"
-	"github.com/fpawel/comm/comport"
-	"github.com/fpawel/elco.v2/internal/cfg"
 	"github.com/fpawel/elco.v2/internal/data"
+	"github.com/fpawel/gohelp/helpwalk"
 	"github.com/lxn/walk"
 	. "github.com/lxn/walk/declarative"
 	"math"
+)
+
+const (
+	ComportKey    = "Comport"
+	ComportGasKey = "ComportGas"
+	ChipTypeKey   = "ChipType"
 )
 
 func (x *AppWindow) runSettingsDialog() {
@@ -160,22 +165,23 @@ func (x *AppWindow) runSettingsDialog() {
 						Children: widgets,
 					},
 
-					Composite{
-						Layout: VBox{},
+					ScrollView{
+						Layout:          VBox{},
+						HorizontalFixed: true,
 						Children: []Widget{
 							GroupBox{
 								Layout: VBox{},
 								Title:  "СОМ порт",
 								Children: []Widget{
 									Label{Text: "Блок измерения"},
-									comboBoxComport(&cbComport, cfg.ComportKey),
+									helpwalk.ComboBoxComport(&cbComport, ComportKey),
+									helpwalk.ComboBoxComport(&cbComportGas, ComportGasKey),
 									Label{Text: "Газовый блок"},
-									comboBoxComport(&cbComportGas, cfg.ComportGasKey),
 								},
 							},
 
 							Label{Text: "Тип микросхемы"},
-							comboBox(&cbChipType, "CHIP_TYPE", []string{
+							helpwalk.ComboBoxWithStringList(&cbChipType, ChipTypeKey, []string{
 								"24LC16",
 								"24LC64",
 								"24LC256",
@@ -214,53 +220,35 @@ func (x *AppWindow) runSettingsDialog() {
 	dlg.Run()
 }
 
-func comboBoxComport(comboBox **walk.ComboBox, key string) ComboBox {
-	return ComboBox{
-		AssignTo:     comboBox,
-		Model:        getComports(),
-		CurrentIndex: comportIndex(cfg.Str(key)),
-		OnMouseDown: func(_, _ int, _ walk.MouseButton) {
-			cb := *comboBox
-			n := cb.CurrentIndex()
-			if err := cb.SetModel(getComports()); err != nil {
-				panic(err)
-			}
-			if err := cb.SetCurrentIndex(n); err != nil {
-				panic(err)
-			}
-		},
-		OnCurrentIndexChanged: func() {
-			cfg.PutStr(key, (*comboBox).Text())
-		},
-	}
-}
+//func comboBoxComport(comboBox **walk.ComboBox, key string) ComboBox {
+//	return ComboBox{
+//		AssignTo:     comboBox,
+//		Model:        getComports(),
+//		CurrentIndex: comportIndex(helpwalk.IniStr(key)),
+//		OnMouseDown: func(_, _ int, _ walk.MouseButton) {
+//			cb := *comboBox
+//			n := cb.CurrentIndex()
+//			if err := cb.SetModel(getComports()); err != nil {
+//				panic(err)
+//			}
+//			if err := cb.SetCurrentIndex(n); err != nil {
+//				panic(err)
+//			}
+//		},
+//		OnCurrentIndexChanged: func() {
+//			helpwalk.IniPutStr(key, (*comboBox).Text())
+//		},
+//	}
+//}
+//
 
-func comboBox(comboBox **walk.ComboBox, key string, model []string) ComboBox {
-	return ComboBox{
-		AssignTo:     comboBox,
-		Model:        model,
-		CurrentIndex: comboBoxIndex(cfg.Str(key), model),
-		OnCurrentIndexChanged: func() {
-			cfg.PutStr(key, (*comboBox).Text())
-		},
-	}
-}
-
-func comboBoxIndex(s string, m []string) int {
-	for i, x := range m {
-		if s == x {
-			return i
-		}
-	}
-	return -1
-}
-
-func comportIndex(portName string) int {
-	ports, _ := comport.Ports()
-	return comboBoxIndex(portName, ports)
-}
-
-func getComports() []string {
-	ports, _ := comport.Ports()
-	return ports
-}
+//
+//func comportIndex(portName string) int {
+//	ports, _ := comport.Ports()
+//	return comboBoxIndex(portName, ports)
+//}
+//
+//func getComports() []string {
+//	ports, _ := comport.Ports()
+//	return ports
+//}

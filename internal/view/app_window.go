@@ -2,15 +2,18 @@ package view
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"github.com/ansel1/merry"
-	"github.com/fpawel/comm"
 	"github.com/fpawel/elco.v2/internal/data"
+	"github.com/fpawel/gohelp"
 	"github.com/hako/durafmt"
 	"github.com/lxn/walk"
 	. "github.com/lxn/walk/declarative"
 	"github.com/lxn/win"
+	"github.com/powerman/must"
 	"github.com/powerman/structlog"
+	"strings"
 	"sync"
 	"time"
 )
@@ -20,8 +23,7 @@ type AppWindow struct {
 	tblProducts,
 	tblJournal *walk.TableView
 	gbBlocks *walk.GroupBox
-	lblWork,
-	lblWorkTime *walk.Label
+
 	delayHelp      *delayHelp
 	productsTblMdl *ProductsTable
 	blocksTblMdl   *BlocksTable
@@ -34,8 +36,9 @@ type AppWindow struct {
 
 	tbStop,
 	tbStart, tbNewParty *walk.ToolButton
-	cbWorks    *walk.ComboBox
-	panelTools *walk.ScrollView
+	cbWorks *walk.ComboBox
+
+	menuProductTypes *walk.Menu
 
 	ctxWork, ctxDelay context.Context
 	works             []NamedWork
@@ -81,7 +84,7 @@ func (x *AppWindow) showErr(title string, err error) {
 	}
 
 	walk.MsgBox(x.w, title,
-		err.Error(), walk.MsgBoxIconError|walk.MsgBoxOK)
+		fmt.Sprintf("выполнение завершилось с ошибкой: \n\n%v", err), walk.MsgBoxIconError|walk.MsgBoxOK)
 }
 
 func (x *AppWindow) AddJournalRecord(logLevel LogLevel, text string) {
@@ -124,7 +127,7 @@ func (x *AppWindow) SkipDelay() {
 }
 
 func (x *AppWindow) RunDelay(what string, duration time.Duration) {
-	log := comm.LogWithKeys(log, "delay", what, "total_delay_duration", durafmt.Parse(duration))
+	log := gohelp.LogWithKeys(log, "delay", what, "total_delay_duration", durafmt.Parse(duration))
 	log.Info("begin", structlog.KeyTime, now())
 	x.SynchronizeStrong(func() {
 		x.ctxDelay, x.delayHelp.skip = context.WithTimeout(x.ctxWork, duration)
@@ -156,10 +159,9 @@ func (x *AppWindow) window() MainWindow {
 		Layout:     VBox{MarginsZero: true, SpacingZero: true},
 
 		Children: []Widget{
-			ScrollView{
-				AssignTo:      &x.panelTools,
-				VerticalFixed: true,
-				Layout:        HBox{SpacingZero: true},
+
+			Composite{
+				Layout: HBox{Spacing: 5},
 				Children: []Widget{
 					ToolButton{
 						AssignTo:    &x.tbNewParty,
@@ -173,7 +175,7 @@ func (x *AppWindow) window() MainWindow {
 								return
 							}
 							data.CreateNewParty()
-							x.resetProductsView()
+							x.ResetProductsView()
 						},
 					},
 
@@ -183,7 +185,7 @@ func (x *AppWindow) window() MainWindow {
 						ToolTipText: "Выбрать годные ЭХЯ",
 						OnClicked: func() {
 							data.SetOnlyOkProductsProduction()
-							x.resetProductsView()
+							x.ResetProductsView()
 						},
 					},
 
@@ -195,8 +197,6 @@ func (x *AppWindow) window() MainWindow {
 
 						},
 					},
-
-					VSpacer{MinSize: Size{10, 0}},
 
 					ToolButton{
 						AssignTo:    &x.tbStart,
@@ -216,21 +216,21 @@ func (x *AppWindow) window() MainWindow {
 							x.cancelWork()
 						},
 					},
-					VSpacer{MinSize: Size{3, 0}},
+
 					ComboBox{
 						AssignTo:     &x.cbWorks,
 						Model:        works,
 						CurrentIndex: 0,
 					},
 
-					Label{
-						AssignTo:  &x.lblWorkTime,
-						TextColor: walk.RGB(0, 128, 0),
-					},
-					Label{
-						AssignTo: &x.lblWork,
-					},
 					x.delayHelp.Widget(),
+
+					ScrollView{
+						AssignTo:      &x.delayHelp.spacer,
+						Layout:        HBox{MarginsZero: true},
+						MaxSize:       Size{0, 1},
+						VerticalFixed: true,
+					},
 
 					ToolButton{
 						Text:        "Ввод серийных номеров ЭХЯ",
@@ -248,15 +248,12 @@ func (x *AppWindow) window() MainWindow {
 					},
 				},
 			},
-			ScrollView{
-				Layout: HBox{MarginsZero: true, SpacingZero: true},
-				Children: []Widget{
-
-					GroupBox{
-						Layout: Grid{},
-						Title:  "Настраиваемые ЭХЯ",
+			TabWidget{
+				Pages: []TabPage{
+					{
+						Title:  "Партия",
+						Layout: Grid{MarginsZero: true, SpacingZero: true},
 						Children: []Widget{
-
 							TableView{
 								AssignTo:                 &x.tblProducts,
 								NotSortableByHeaderClick: true,
@@ -264,7 +261,7 @@ func (x *AppWindow) window() MainWindow {
 								CheckBoxes:               true,
 								MultiSelection:           true,
 								Model:                    x.productsTblMdl,
-								Columns:                  x.productsTblMdl.Columns(),
+								Columns:                  AllProductsTableColumns(),
 								OnItemActivated: func() {
 									p := x.productsTblMdl.ProductAtPlace(x.tblProducts.CurrentIndex())
 									if p.ProductID != 0 {
@@ -281,13 +278,65 @@ func (x *AppWindow) window() MainWindow {
 									}
 
 								},
+								ContextMenuItems: []MenuItem{
+									Action{
+										Text: "Выбрать",
+										OnTriggered: func() {
+											for _, place := range x.tblProducts.SelectedIndexes() {
+												place := place
+												must.AbortIf(x.productsTblMdl.SetChecked(place, true))
+												x.productsTblMdl.PublishRowChanged(place)
+											}
+										},
+									},
+									Action{
+										Text: "Отменить",
+										OnTriggered: func() {
+											for _, place := range x.tblProducts.SelectedIndexes() {
+												place := place
+												must.AbortIf(x.productsTblMdl.SetChecked(place, false))
+												x.productsTblMdl.PublishRowChanged(place)
+											}
+										},
+									},
+									Separator{},
+									Menu{
+										Text:     "Исполнение",
+										AssignTo: &x.menuProductTypes,
+									},
+									Menu{
+										Text: "Метод расчёта",
+										Items: []MenuItem{
+											Action{
+												Text: "как во всей партии",
+												OnTriggered: x.updateSelectedProduct(func(p *data.Product) {
+													p.PointsMethod = sql.NullInt64{}
+												}),
+											},
+											Action{
+												Text: "по двум точкам",
+												OnTriggered: x.updateSelectedProduct(func(p *data.Product) {
+													p.PointsMethod = sql.NullInt64{2, true}
+												}),
+											},
+											Action{
+												Text: "по трём точкам",
+												OnTriggered: x.updateSelectedProduct(func(p *data.Product) {
+													p.PointsMethod = sql.NullInt64{3, true}
+												}),
+											},
+										},
+									},
+								},
 							},
 						},
 					},
-					Composite{
-						Layout: VBox{MarginsZero: true, SpacingZero: true},
+					{
+						Title:  "Работа",
+						Layout: VBox{},
 						Children: []Widget{
 							GroupBox{
+								MaxSize:  Size{0, 370},
 								AssignTo: &x.gbBlocks,
 								Layout:   Grid{},
 								Title:    "Опрос",
@@ -328,9 +377,9 @@ func (x *AppWindow) window() MainWindow {
 								},
 							},
 							GroupBox{
-								MaxSize: Size{0, 200},
-								Title:   "Журнал",
-								Layout:  Grid{},
+
+								Title:  "Журнал",
+								Layout: Grid{},
 								Children: []Widget{
 									TableView{
 										AssignTo: &x.tblJournal,
@@ -351,6 +400,15 @@ func (x *AppWindow) window() MainWindow {
 								},
 							},
 						},
+					},
+				},
+			},
+			Composite{
+				Layout: HBox{MarginsZero: true, SpacingZero: true},
+				Children: []Widget{
+
+					Composite{
+						Layout: VBox{MarginsZero: true, SpacingZero: true},
 					},
 				},
 			},
@@ -393,7 +451,40 @@ func (x *AppWindow) Run() {
 		log.Info("работа прервана, пользователь закрыл приложение")
 	})
 
+	x.productsTblMdl.SetTableView(x.tblProducts)
+	x.setupProductTypesMenu()
 	x.w.Run()
+}
+
+func (x *AppWindow) setupProductTypesMenu() {
+	add := func(s string, f func(*data.Product)) {
+		a := walk.NewAction()
+		must.AbortIf(a.SetText(s))
+		a.Triggered().Attach(x.updateSelectedProduct(f))
+		must.AbortIf(x.menuProductTypes.Actions().Add(a))
+	}
+	add("как во всей партии", func(p *data.Product) {
+		p.ProductTypeName = sql.NullString{}
+	})
+
+	for _, s := range data.ProductTypeNames() {
+		s := s
+		add(s, func(p *data.Product) {
+			p.ProductTypeName = sql.NullString{s, true}
+		})
+	}
+}
+
+func (x *AppWindow) updateSelectedProduct(f func(p *data.Product)) func() {
+	return func() {
+		for _, place := range x.tblProducts.SelectedIndexes() {
+			p := data.GetProductAtPlace(place)
+			f(&p)
+			must.AbortIf(data.DB.Save(&p))
+			x.productsTblMdl.ResetProductRow(place)
+		}
+
+	}
 }
 
 func (x *AppWindow) runMainWork() {
@@ -413,7 +504,10 @@ func (x *AppWindow) runMainWork() {
 
 	workIndex := x.cbWorks.CurrentIndex()
 	work := x.works[workIndex]
-	x.AddJournalRecord(INF, fmt.Sprintf("%v: начало выполнения", work.Name))
+
+	what := strings.ToLower(fmt.Sprintf("Работа: %v", work.Name))
+
+	x.AddJournalRecord(INF, fmt.Sprintf("%s: начало выполнения", what))
 
 	go func() {
 
@@ -435,24 +529,28 @@ func (x *AppWindow) runMainWork() {
 				y.WindowBase.SetVisible(!y.V)
 			}
 			if err == nil {
-				x.AddJournalRecord(INF, fmt.Sprintf("%v: выполнено", work.Name))
+				x.AddJournalRecord(INF, fmt.Sprintf("%s: выполнено", what))
 				return
 			}
 			if merry.Is(err, context.Canceled) {
-				x.AddJournalRecord(WRN, fmt.Sprintf("%v: выполнение прервано", work.Name))
+				x.AddJournalRecord(WRN, fmt.Sprintf("%s: выполнение прервано", what))
 				return
 			}
 
-			x.AddJournalRecord(ERR, fmt.Sprintf("%v: %v", work.Name, err))
+			x.AddJournalRecord(ERR, fmt.Sprintf("%s: выполнение завершилось с ошибкой: %v", what, err))
 
-			x.showErr(work.Name, err)
+			x.showErr(what, err)
 
 		})
 	}()
 }
 
-func (x *AppWindow) resetProductsView() {
-	x.productsTblMdl.Reset(x.tblProducts)
+func (x *AppWindow) ResetProductsView() {
+	x.productsTblMdl.Reset()
+}
+
+func (x *AppWindow) ResetProductRow(place int) {
+	x.productsTblMdl.ResetProductRow(place)
 }
 
 func (x *AppWindow) SetInterrogateBlockValues(block int, values []float64) {
@@ -467,7 +565,6 @@ func (x *AppWindow) SetInterrogateBlockValues(block int, values []float64) {
 		for n := 0; n < 8; n++ {
 			x.blocksTblMdl.values[block*8+n] = &values[n]
 		}
-		x.productsTblMdl.PublishRowsReset()
 		x.blocksTblMdl.PublishRowsReset()
 	})
 }

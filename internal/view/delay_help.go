@@ -2,20 +2,24 @@ package view
 
 import (
 	"context"
+	"github.com/fpawel/gohelp/helpstr"
 	"github.com/lxn/walk"
 	. "github.com/lxn/walk/declarative"
 	"time"
 )
 
 type delayHelp struct {
-	placeholder                   *walk.ScrollView
-	pb                            *walk.ProgressBar
-	lblWhat, lblTotal, lblElapsed *walk.Label
-	skip                          context.CancelFunc
+	spacer      *walk.ScrollView
+	placeholder *walk.Composite
+	pb          *walk.ProgressBar
+	lblWhat,
+	lblTotal *walk.Label
+	skip context.CancelFunc
 }
 
 func (x *delayHelp) show(what string, total time.Duration) {
 
+	x.spacer.SetVisible(false)
 	x.placeholder.SetVisible(true)
 	x.pb.SetRange(0, int(total.Nanoseconds()/1000000))
 	x.pb.SetValue(0)
@@ -23,10 +27,7 @@ func (x *delayHelp) show(what string, total time.Duration) {
 	if err := x.lblWhat.SetText(what); err != nil {
 		panic(err)
 	}
-	if err := x.lblTotal.SetText(fmtDuration(total)); err != nil {
-		panic(err)
-	}
-	if err := x.lblElapsed.SetText("00:00:00"); err != nil {
+	if err := x.lblTotal.SetText(helpstr.FormatDuration(total)); err != nil {
 		panic(err)
 	}
 
@@ -37,20 +38,21 @@ func (x *delayHelp) run(done <-chan struct{}) {
 	ticker := time.NewTicker(time.Second)
 	defer func() {
 		ticker.Stop()
-		x.placeholder.Synchronize(func() {
+		x.placeholder.Parent().Synchronize(func() {
 			x.placeholder.SetVisible(false)
+			x.spacer.SetVisible(true)
 		})
 	}()
 	for {
 		select {
 		case <-ticker.C:
-			x.placeholder.Synchronize(func() {
+			x.pb.Synchronize(func() {
 				x.pb.SetValue(int(time.Since(startMoment).Nanoseconds() / 1000000))
-				if err := x.lblElapsed.SetText(fmtDuration(time.Since(startMoment))); err != nil {
-					log.PrintErr(err)
-					return
-				}
+
 			})
+			//x.lblElapsed.Synchronize(func() {
+			//	must.AbortIf(x.lblElapsed.SetText(fmtDuration(time.Since(startMoment))))
+			//})
 		case <-done:
 			return
 		}
@@ -58,52 +60,36 @@ func (x *delayHelp) run(done <-chan struct{}) {
 }
 
 func (x *delayHelp) Widget() Widget {
-	return ScrollView{
-		Layout:        HBox{SpacingZero: true, MarginsZero: true},
-		VerticalFixed: true,
+	return Composite{
+		AssignTo: &x.placeholder,
+		Visible:  false,
+		Layout:   HBox{Spacing: 10, Margins: Margins{Left: 10, Right: 2}},
 		Children: []Widget{
-
-			ScrollView{
-				AssignTo:      &x.placeholder,
-				Visible:       false,
-				Layout:        HBox{Spacing: 10, Margins: Margins{Left: 10, Right: 2}},
-				VerticalFixed: true,
+			Label{
+				AssignTo:  &x.lblWhat,
+				TextColor: walk.RGB(0, 0, 128),
+			},
+			Label{
+				AssignTo:  &x.lblTotal,
+				TextColor: walk.RGB(0, 0, 128),
+			},
+			Composite{
+				Layout: VBox{MarginsZero: true, SpacingZero: true},
 				Children: []Widget{
-					Label{
-						AssignTo:  &x.lblWhat,
-						TextColor: walk.RGB(0, 0, 128),
+					ProgressBar{
+						AssignTo: &x.pb,
+						MaxSize:  Size{0, 15},
+						MinSize:  Size{0, 15},
 					},
-					Label{
-						AssignTo:  &x.lblElapsed,
-						TextColor: walk.RGB(139, 0, 0),
-					},
-					Label{
-						Text:      ":",
-						TextColor: walk.RGB(0, 0, 128),
-					},
-					Label{
-						AssignTo:  &x.lblTotal,
-						TextColor: walk.RGB(0, 0, 128),
-					},
-					Composite{
-						Layout: VBox{MarginsZero: true, SpacingZero: true},
-						Children: []Widget{
-							ProgressBar{
-								AssignTo: &x.pb,
-								MaxSize:  Size{0, 15},
-								MinSize:  Size{0, 15},
-							},
-						},
-					},
+				},
+			},
 
-					ToolButton{
-						Image:       "img/skip25.png",
-						ToolTipText: "Продолжить без задержки",
-						OnClicked: func() {
-							log.Info("пользователь прервал задержку")
-							x.skip()
-						},
-					},
+			ToolButton{
+				Image:       "img/skip25.png",
+				ToolTipText: "Продолжить без задержки",
+				OnClicked: func() {
+					log.Info("пользователь прервал задержку")
+					x.skip()
 				},
 			},
 		},

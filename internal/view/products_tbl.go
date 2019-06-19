@@ -4,6 +4,7 @@ import (
 	"github.com/fpawel/elco.v2/internal/data"
 	"github.com/lxn/walk"
 	"github.com/lxn/walk/declarative"
+	"github.com/powerman/must"
 	"os"
 	"path/filepath"
 )
@@ -11,15 +12,15 @@ import (
 type ProductsTable struct {
 	walk.TableModelBase
 	products    []data.ProductInfo
-	fields      []data.ProductField
 	blocksTable *BlocksTable
+	tableView   *walk.TableView
 }
 
 func newProductsModels() (*ProductsTable, *BlocksTable) {
 	x, y := new(ProductsTable), new(BlocksTable)
 	x.blocksTable = y
 	y.productsTable = x
-	x.setup()
+
 	return x, y
 }
 
@@ -28,15 +29,14 @@ func (x *ProductsTable) setup() {
 	for _, p := range data.GetLastPartyProductsInfo() {
 		x.products[p.Place] = p
 	}
-	x.fields = data.NotEmptyProductsFields(x.products)
 }
 
 func (x *ProductsTable) ProductAtPlace(place int) data.ProductInfo {
 	return x.products[place]
 }
 
-func (x *ProductsTable) Columns() (columns []declarative.TableViewColumn) {
-	for _, c := range x.fields {
+func AllProductsTableColumns() (columns []declarative.TableViewColumn) {
+	for _, c := range data.AllProductsFields {
 		precision, _ := productsColPrecision[c]
 		columns = append(columns, declarative.TableViewColumn{
 			Title:     productColName[c],
@@ -47,33 +47,39 @@ func (x *ProductsTable) Columns() (columns []declarative.TableViewColumn) {
 	return
 }
 
-func (x *ProductsTable) Reset(tableView *walk.TableView) {
-
+func (x *ProductsTable) SetTableView(tableView *walk.TableView) {
+	x.tableView = tableView
 	x.setup()
+}
 
+func (x *ProductsTable) ResetProductRow(place int) {
+	x.tableView.Synchronize(func() {
+		x.products[place] = data.GetProductInfoAtPlace(place)
+		x.PublishRowChanged(place)
+	})
+}
+
+func setupProductsColumns(tableView *walk.TableView, fields []data.ProductField) {
+	tableView.SetVisible(false)
+	defer tableView.SetVisible(true)
 	if err := tableView.Columns().Clear(); err != nil {
 		panic(err)
 	}
-	for _, c := range x.fields {
+	for _, c := range fields {
 		col := walk.NewTableViewColumn()
-		if err := col.SetTitle(productColName[c]); err != nil {
-			panic(err)
-		}
-		if err := col.SetWidth(80); err != nil {
-			panic(err)
-		}
-		if err := tableView.Columns().Add(col); err != nil {
-			panic(err)
-		}
+		must.AbortIf(col.SetTitle(productColName[c]))
+		must.AbortIf(col.SetWidth(80))
+		must.AbortIf(tableView.Columns().Add(col))
 		precision, f := productsColPrecision[c]
 		if !f {
 			precision = 3
 		}
-		if err := col.SetPrecision(precision); err != nil {
-			panic(err)
-		}
+		must.AbortIf(col.SetPrecision(precision))
 	}
+}
 
+func (x *ProductsTable) Reset() {
+	x.setup()
 	x.PublishRowsReset()
 	x.blocksTable.PublishRowsReset()
 }
@@ -92,7 +98,7 @@ func (x *ProductsTable) Value(row, col int) interface{} {
 		return ""
 	}
 
-	if v := p.FieldValue(x.fields[col]); v != nil {
+	if v := p.FieldValue(data.AllProductsFields[col]); v != nil {
 		return v
 	}
 	return ""
@@ -129,7 +135,7 @@ func (x *ProductsTable) StyleCell(c *walk.CellStyle) {
 		c.BackgroundColor = walk.RGB(245, 245, 245)
 	}
 
-	if c.Col() < 0 || c.Col() >= len(x.fields) {
+	if c.Col() < 0 || c.Col() >= len(data.AllProductsFields) {
 		return
 	}
 
@@ -138,7 +144,7 @@ func (x *ProductsTable) StyleCell(c *walk.CellStyle) {
 		return
 	}
 
-	field := x.fields[c.Col()]
+	field := data.AllProductsFields[c.Col()]
 	c.Font = fontDefault
 	switch field {
 	case data.ProductFieldPlace:

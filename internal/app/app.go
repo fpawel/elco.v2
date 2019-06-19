@@ -5,10 +5,10 @@ import (
 	"context"
 	"fmt"
 	"github.com/ansel1/merry"
-	"github.com/fpawel/comm"
 	"github.com/fpawel/comm/modbus"
 	"github.com/fpawel/elco.v2/internal/data"
 	"github.com/fpawel/elco.v2/internal/view"
+	"github.com/fpawel/gohelp"
 	"github.com/hako/durafmt"
 	"github.com/powerman/structlog"
 	"path/filepath"
@@ -58,7 +58,7 @@ func pause(duration time.Duration, done <-chan struct{}) {
 
 func readBlock(log *structlog.Logger, block int, ctx context.Context) ([]float64, error) {
 
-	log = comm.LogWithKeys(log, "блок", block)
+	log = gohelp.LogWithKeys(log, "блок", block)
 
 	values, err := modbus.Read3BCDs(log, readerMeasure(ctx), modbus.Addr(block+101), 0, 8)
 	if err != nil {
@@ -76,7 +76,7 @@ func delay(what string, duration time.Duration) error {
 		log = origLog
 		MainWindow.SkipDelay()
 	}()
-	log = comm.LogWithKeys(log,
+	log = gohelp.LogWithKeys(log,
 		"фоновый_опрос", what,
 		"total_delay_duration", durafmt.Parse(duration),
 	)
@@ -119,7 +119,7 @@ func groupProductsByBlocks(ps []data.Product) (gs [][]*data.Product) {
 }
 
 func doWork(w view.NamedWork) error {
-	log = comm.NewLogWithKeys("работа", w.Name)
+	log = gohelp.NewLogWithKeys("работа", w.Name)
 	defer func() {
 		log.ErrIfFail(comportGas.Close)
 		log.ErrIfFail(comportMeasure.Close)

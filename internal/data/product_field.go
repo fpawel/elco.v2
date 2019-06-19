@@ -33,6 +33,15 @@ const (
 	ProductFieldNote
 )
 
+var AllProductsFields = allProductsFields()
+
+func allProductsFields() (fields []ProductField) {
+	for f := ProductFieldPlace; f <= ProductFieldNote; f++ {
+		fields = append(fields, f)
+	}
+	return
+}
+
 func NotEmptyProductsFields(products []ProductInfo) (fields []ProductField) {
 	for f := ProductFieldPlace; f <= ProductFieldNote; f++ {
 		for _, p := range products {

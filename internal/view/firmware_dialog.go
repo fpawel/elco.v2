@@ -212,9 +212,8 @@ func (x *firmwareDialog) dialog() Dialog {
 						},
 					},
 
-					ScrollView{
-						HorizontalFixed: true,
-						Layout:          VBox{},
+					Composite{
+						Layout: VBox{},
 						Children: []Widget{
 
 							PushButton{
@@ -230,28 +229,29 @@ func (x *firmwareDialog) dialog() Dialog {
 							DateEdit{
 								AssignTo: &x.edDate,
 							},
+							//ScrollView{Layout:VBox{MarginsZero:true}, HorizontalFixed:true},
 						},
 					},
 				},
 			},
-			ScrollView{
-				VerticalFixed: true,
-				Layout:        HBox{MarginsZero: true, SpacingZero: true},
+			Composite{
+				Layout: HBox{MarginsZero: true, SpacingZero: true},
 				Children: []Widget{
 					RadioButtonGroup{
 						Buttons: []RadioButton{
-							RadioButton{
+							{
 								Text:      "Записано",
 								AssignTo:  &x.rbStored,
 								OnClicked: x.rbFirmwareInfoSourceClick,
 							},
-							RadioButton{
+							{
 								AssignTo:  &x.rbCalculated,
 								Text:      "Расчитано",
 								OnClicked: x.rbFirmwareInfoSourceClick,
 							},
 						},
 					},
+					ScrollView{Layout: HBox{MarginsZero: true}, VerticalFixed: true},
 				},
 			},
 			ImageView{

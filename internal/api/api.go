@@ -2,6 +2,7 @@ package api
 
 import (
 	"database/sql"
+	"github.com/fpawel/elco.v2/internal/app"
 	"github.com/fpawel/elco.v2/internal/data"
 	"strconv"
 	"strings"
@@ -57,7 +58,7 @@ func (x LastPartySvc) SetSerialAtPlace(p struct {
 	if err := data.DB.Save(&product); err != nil {
 		return err
 	}
-	//view.ResetProductAtPlace(p.Place)
+	app.MainWindow.ResetProductRow(p.Place)
 	return nil
 }
 
@@ -72,7 +73,7 @@ func (x LastPartySvc) SetProductTypeAtPlace(p struct {
 	if err := data.DB.Save(&product); err != nil {
 		return err
 	}
-	//view.ResetProductAtPlace(p.Place)
+	app.MainWindow.ResetProductRow(p.Place)
 	return nil
 }
 
@@ -90,7 +91,7 @@ func (x LastPartySvc) SetPointsMethodAtPlace(a [2]int, _ *struct{}) error {
 	if err := data.DB.Save(&product); err != nil {
 		return err
 	}
-	//view.ResetProductAtPlace(a[0])
+	app.MainWindow.ResetProductsView()
 	return nil
 }
 
